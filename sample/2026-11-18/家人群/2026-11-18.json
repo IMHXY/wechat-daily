@@ -1,0 +1,26 @@
+[
+ {
+  "type": 1,
+  "content": "今天回来吃饭吗？",
+  "sender": "妈",
+  "timestamp": 1795003920
+ },
+ {
+  "type": 1,
+  "content": "回，八点到。",
+  "sender": "我",
+  "timestamp": 1795004040
+ },
+ {
+  "type": 1,
+  "content": "那我把汤炖上，你少吃点外面的。",
+  "sender": "妈",
+  "timestamp": 1795004100
+ },
+ {
+  "type": 1,
+  "content": "好。",
+  "sender": "我",
+  "timestamp": 1795004160
+ }
+]

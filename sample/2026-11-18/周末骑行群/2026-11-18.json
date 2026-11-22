@@ -1,0 +1,38 @@
+[
+ {
+  "type": 1,
+  "content": "这周路线改成 40 公里 环线，起点还是地铁站 B 口。",
+  "sender": "阿凯",
+  "timestamp": 1794969000
+ },
+ {
+  "type": 1,
+  "content": "行，我报名。",
+  "sender": "我",
+  "timestamp": 1794969060
+ },
+ {
+  "type": 1,
+  "content": "八点集合，迟到不等。",
+  "sender": "阿凯",
+  "timestamp": 1794969180
+ },
+ {
+  "type": 1,
+  "content": "明白，我七点半到。",
+  "sender": "我",
+  "timestamp": 1794969300
+ },
+ {
+  "type": 1,
+  "content": "路上有段逆风，抗不抗得住？",
+  "sender": "阿凯",
+  "timestamp": 1794969360
+ },
+ {
+  "type": 1,
+  "content": "没问题，慢慢骑。",
+  "sender": "我",
+  "timestamp": 1794969480
+ }
+]

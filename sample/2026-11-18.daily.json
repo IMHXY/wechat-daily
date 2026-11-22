@@ -1,0 +1,259 @@
+{
+  "date": "2026-11-18",
+  "timezone": "Asia/Shanghai",
+  "generated_at": "2026-11-22T22:59:45+08:00",
+  "stats": {
+    "message_count": 22,
+    "message_count_total": 22,
+    "chat_count": 5,
+    "chat_count_total": 5,
+    "skipped_chat_count": 0,
+    "silent_chat_count": 0,
+    "self_count": 10,
+    "active_hours": [
+      "09:12",
+      "20:16"
+    ],
+    "peak_hour": 10
+  },
+  "chats": [
+    {
+      "chat_name": "周末骑行群",
+      "chat_type": "group",
+      "message_count": 6,
+      "trimmed": false,
+      "messages": [
+        {
+          "ts": 1794969000,
+          "time": "2026-11-18 10:30:00",
+          "hour": 10,
+          "sender": "阿凯",
+          "is_self": false,
+          "type": "text",
+          "content": "这周路线改成 40 公里 环线，起点还是地铁站 B 口。"
+        },
+        {
+          "ts": 1794969060,
+          "time": "2026-11-18 10:31:00",
+          "hour": 10,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "行，我报名。"
+        },
+        {
+          "ts": 1794969180,
+          "time": "2026-11-18 10:33:00",
+          "hour": 10,
+          "sender": "阿凯",
+          "is_self": false,
+          "type": "text",
+          "content": "八点集合，迟到不等。"
+        },
+        {
+          "ts": 1794969300,
+          "time": "2026-11-18 10:35:00",
+          "hour": 10,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "明白，我七点半到。"
+        },
+        {
+          "ts": 1794969360,
+          "time": "2026-11-18 10:36:00",
+          "hour": 10,
+          "sender": "阿凯",
+          "is_self": false,
+          "type": "text",
+          "content": "路上有段逆风，抗不抗得住？"
+        },
+        {
+          "ts": 1794969480,
+          "time": "2026-11-18 10:38:00",
+          "hour": 10,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "没问题，慢慢骑。"
+        }
+      ]
+    },
+    {
+      "chat_name": "读书会群",
+      "chat_type": "group",
+      "message_count": 5,
+      "trimmed": false,
+      "messages": [
+        {
+          "ts": 1794964320,
+          "time": "2026-11-18 09:12:00",
+          "hour": 9,
+          "sender": "老周",
+          "is_self": false,
+          "type": "text",
+          "content": "周六读书会定在下午三点，地点还是图书馆三楼会议室。"
+        },
+        {
+          "ts": 1794964500,
+          "time": "2026-11-18 09:15:00",
+          "hour": 9,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "收到，我把上次没读完的那本带过去。"
+        },
+        {
+          "ts": 1794964560,
+          "time": "2026-11-18 09:16:00",
+          "hour": 9,
+          "sender": "老周",
+          "is_self": false,
+          "type": "text",
+          "content": "好，另外有位新朋友想加入，人数我报给管理员了。"
+        },
+        {
+          "ts": 1794964740,
+          "time": "2026-11-18 09:19:00",
+          "hour": 9,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "那我多带两本书，有备用的。"
+        },
+        {
+          "ts": 1794964920,
+          "time": "2026-11-18 09:22:00",
+          "hour": 9,
+          "sender": "小林",
+          "is_self": false,
+          "type": "text",
+          "content": "请问现场可以带饮品吗？"
+        }
+      ]
+    },
+    {
+      "chat_name": "摄影爱好者群",
+      "chat_type": "group",
+      "message_count": 4,
+      "trimmed": false,
+      "messages": [
+        {
+          "ts": 1794991200,
+          "time": "2026-11-18 16:40:00",
+          "hour": 16,
+          "sender": "阿凯",
+          "is_self": false,
+          "type": "text",
+          "content": "上周拍的片子我挑了 12 张发群里了。"
+        },
+        {
+          "ts": 1794991320,
+          "time": "2026-11-18 16:42:00",
+          "hour": 16,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "看到了，第 7 张构图很稳。"
+        },
+        {
+          "ts": 1794991380,
+          "time": "2026-11-18 16:43:00",
+          "hour": 16,
+          "sender": "阿凯",
+          "is_self": false,
+          "type": "text",
+          "content": "那张其实是在等云散开，等了四十分钟。"
+        },
+        {
+          "ts": 1794991500,
+          "time": "2026-11-18 16:45:00",
+          "hour": 16,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "值得。"
+        }
+      ]
+    },
+    {
+      "chat_name": "家人群",
+      "chat_type": "group",
+      "message_count": 4,
+      "trimmed": false,
+      "messages": [
+        {
+          "ts": 1795003920,
+          "time": "2026-11-18 20:12:00",
+          "hour": 20,
+          "sender": "妈",
+          "is_self": false,
+          "type": "text",
+          "content": "今天回来吃饭吗？"
+        },
+        {
+          "ts": 1795004040,
+          "time": "2026-11-18 20:14:00",
+          "hour": 20,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "回，八点到。"
+        },
+        {
+          "ts": 1795004100,
+          "time": "2026-11-18 20:15:00",
+          "hour": 20,
+          "sender": "妈",
+          "is_self": false,
+          "type": "text",
+          "content": "那我把汤炖上，你少吃点外面的。"
+        },
+        {
+          "ts": 1795004160,
+          "time": "2026-11-18 20:16:00",
+          "hour": 20,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "好。"
+        }
+      ]
+    },
+    {
+      "chat_name": "楼下咖啡店",
+      "chat_type": "single",
+      "message_count": 3,
+      "trimmed": false,
+      "messages": [
+        {
+          "ts": 1794981900,
+          "time": "2026-11-18 14:05:00",
+          "hour": 14,
+          "sender": "店员小陈",
+          "is_self": false,
+          "type": "text",
+          "content": "您好，明早的豆子换成耶加雪菲了，风味偏花香。"
+        },
+        {
+          "ts": 1794982020,
+          "time": "2026-11-18 14:07:00",
+          "hour": 14,
+          "sender": "我",
+          "is_self": true,
+          "type": "text",
+          "content": "听起来不错，那我明早试试。"
+        },
+        {
+          "ts": 1794982080,
+          "time": "2026-11-18 14:08:00",
+          "hour": 14,
+          "sender": "店员小陈",
+          "is_self": false,
+          "type": "text",
+          "content": "好嘞，慢走。"
+        }
+      ]
+    }
+  ]
+}
