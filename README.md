@@ -599,36 +599,6 @@ DAILY_INCLUDE_CHATS=
 DAILY_INCLUDE_MAX=50
 ```
 
-### MiniMax 的两个坑
-
-**坑 1：国内站 / 国际站的 key 不能混用**（鉴权系统物理隔离，混用返回 `401 (1004)`）。
-
-程序会自动依次试这四个域名，探到能用的就记住并写回 `config.env`：
-
-| 域名 | 属于 |
-|---|---|
-| `https://api.minimax.cn/v1` | 国内（platform.minimaxi.com） |
-| `https://api.minimaxi.com/v1` | 国内（别名） |
-| `https://api.minimax.io/v1` | 国际（platform.minimax.io） |
-| `https://api.minimax.chat/v1` | 国际（旧） |
-
-**坑 2：两种 key 不能互换**。
-
-| 类型 | 前缀 | 扣什么 | 在哪拿 |
-|---|---|---|---|
-| 按量付费 API Key | `sk-api-…` | 账户余额 | 开放平台 → 接口密钥 |
-| 订阅 Subscription Key | `sk-cp-…` | 订阅额度 | 账户管理 → 订阅管理 → Token Plan / Coding Plan |
-
-用错的表现是 `402 insufficient balance (1008)`——看起来像没钱，其实是拿错了凭据。
-
-体检：
-
-```bat
-python collector\doctor.py --llm-test
-```
-
----
-
 ## 自动出日报的前提
 
 **本机侧（22:55）**
