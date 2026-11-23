@@ -184,6 +184,16 @@ install_task.bat install
 装好后 **22:55 不会弹黑窗口**（任务跑的是 `pythonw.exe`）—— 所以不会再出现
 「以为卡死 → 按 Ctrl+C → 当天日报丢了」这种情况。
 
+注册任务走三条路，按可靠度依次降级，**哪条先成功就用哪条**：
+
+| 顺序 | 方式 | 能开「错过后补跑」 | 能开「电池上也跑」 | 说明 |
+|---|---|---|---|---|
+| 1 | PowerShell `Register-ScheduledTask` | ✅ | ✅ | 官方 API，普通权限即可，首选 |
+| 2 | `schtasks /create /xml` | ✅ | ✅ | 手写 XML 偶尔被 Windows 拒（元素顺序/namespace） |
+| 3 | `schtasks /create` 命令行 | ❌ | ❌ | 一定能建成，但电脑在 22:55 关着的话那天就没日报 |
+
+输出里会写明最终用的是哪一条，以及缺了哪两个开关。
+
 想改成会弹窗的旧模式（只在你想盯着看进度时用）：`install_task.bat install --visible`。
 
 ### 3.4 飞书多维表格怎么建

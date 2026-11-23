@@ -23,14 +23,15 @@ S4U 任务需要「作为批处理作业登录」权限，**普通用户注册�
 所以要用**管理员身份**的 PowerShell 装一次。不加这个参数也能正常出日报，
 只是必须处于登录状态。
 
-三种模式：
-  默认（pythonw）  不弹窗口，普通权限就能装，需要已登录
-  --visible (.bat)  会弹黑窗口，普通权限就能装，需要已登录
-  --s4u            不弹窗口，**需要管理员**装，不用登录也行
+注册用三条路，按可靠度依次降级（哪条成功就用哪条）：
+  1. PowerShell Register-ScheduledTask  官方 API，能设「错过后补跑」「电池上也跑」
+  2. schtasks /create /xml               同上，但手写 XML 偶尔会被 Windows 拒（namespace 错）
+  3. schtasks /create 命令行              一定能建成，但**没有**补跑和电池设置
 """
 
 import argparse
 import datetime as dt
+import getpass
 import os
 import subprocess
 import sys
@@ -51,6 +52,13 @@ def out(msg=""):
         sys.stdout.flush()
     except Exception:
         pass
+
+
+def current_user_id():
+    """当前登录用户，格式 DOMAIN\\user（任务计划程序认这个）。"""
+    user = os.environ.get("USERNAME", "") or getpass.getuser()
+    domain = os.environ.get("USERDOMAIN", "")
+    return ("%s\\%s" % (domain, user)) if domain else user
 
 
 def find_pythonw():
@@ -92,8 +100,8 @@ def build_task_command(time_str="22:55", task_name=TASK_NAME,
                        command=None, arguments=None):
     """拼出 schtasks 的参数（用列表传参，避开 Windows 引号地狱）。
 
-    这是**兜底**方案。优先用 build_task_xml() —— 走 XML 才能打开
-    「错过后补跑」和「电池上也能跑」这两个开关，命令行方式做不到。
+    这是**兜底**方案。优先用 Register-ScheduledTask / XML ——
+    只有它们能打开「错过后补跑」和「电池上也跑」这两个开关。
     """
     if command is None:
         command, arguments, _ = resolve_action()
@@ -115,6 +123,18 @@ def build_task_xml(time_str="22:55", task_name=TASK_NAME,
                    command=None, arguments=None, logon_type="InteractiveToken"):
     """生成任务计划程序的 XML。
 
+    ⚠️ 元素**顺序**必须严格按任务计划程序 schema：
+        RegistrationInfo -> Triggers -> Principals -> Settings -> Actions
+    顺序错了 Windows 会报
+    「The task XML contains an element or attribute from an unexpected namespace」。
+
+    Settings 里面的子元素也要按 schema 顺序：
+        AllowStartOnDemand, RestartOnFailure, MultipleInstancesPolicy,
+        DisallowStartIfOnBatteries, StopIfGoingOnBatteries, AllowHardTerminate,
+        StartWhenAvailable, NetworkProfileName, RunOnlyIfNetworkAvailable,
+        WakeToRun, Enabled, Hidden, DeleteExpiredTaskAfter, IdleSettings,
+        NetworkSettings, ExecutionTimeLimit, Priority, RunOnlyIfIdle, ...
+
     三个关键开关（schtasks 命令行方式默认是关的）：
       StartWhenAvailable = true  -> 22:55 电脑没开，之后开机也会补跑一次
       DisallowStartIfOnBatteries / StopIfGoingOnBatteries = false
@@ -130,27 +150,12 @@ def build_task_xml(time_str="22:55", task_name=TASK_NAME,
     start = "%sT%s:00" % (today, time_str)
     if command is None:
         command, arguments, _ = resolve_action()
-    xml = """<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/2004/02/mit/task">
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <IdleSettings>
-      <StopOnIdleEnd>false</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
-    <Priority>7</Priority>
-  </Settings>
+    xml = """<?xml version="1.0" encoding="UTF-16" standalone="yes"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>每天生成微信沟通日报</Description>
+    <URI>\\%s</URI>
+  </RegistrationInfo>
   <Triggers>
     <CalendarTrigger>
       <StartBoundary>%s</StartBoundary>
@@ -162,32 +167,123 @@ def build_task_xml(time_str="22:55", task_name=TASK_NAME,
   </Triggers>
   <Principals>
     <Principal id="Author">
+      <UserId>%s</UserId>
       <LogonType>%s</LogonType>
       <RunLevel>LeastPrivilege</RunLevel>
     </Principal>
   </Principals>
+  <Settings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <WakeToRun>false</WakeToRun>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+  </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>"%s"</Command>
+      <Command>%s</Command>
       <Arguments>%s</Arguments>
       <WorkingDirectory>%s</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>
-""" % (esc(start), esc(logon_type), esc(command), esc(arguments or ""), esc(HERE))
+""" % (esc(task_name), esc(start), esc(current_user_id()), esc(logon_type),
+       esc(command), esc(arguments or ""), esc(HERE))
     return xml
+
+
+def build_powershell_script(time_str="22:55", task_name=TASK_NAME,
+                             command=None, arguments=None, s4u=False):
+    """生成用 PowerShell Register-ScheduledTask 注册任务的脚本。
+
+    为什么优先用它而不是 schtasks /xml：
+      ① 官方 API，元素顺序/参数名由系统保证，不会再出现 namespace 报错
+      ② -StartWhenAvailable / -AllowStartIfOnBatteries / -DontStopIfGoingOnBatteries
+         直接就有，不必手写 XML
+      ③ -LogonType Interactive 普通权限就能注册，不需要管理员
+    """
+    if command is None:
+        command, arguments, _ = resolve_action()
+    logon = "S4U" if s4u else "Interactive"
+    # 单引号在 PowerShell 里是字符串定界符，路径里出现单引号要转义成两个
+    def ps_quote(s):
+        return "'" + str(s).replace("'", "''") + "'"
+    return """$ErrorActionPreference = 'Stop'
+$action = New-ScheduledTaskAction -Execute {cmd} -Argument {args} -WorkingDirectory {wd}
+$trigger = New-ScheduledTaskTrigger -Daily -At {time}
+$principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType {logon} -RunLevel Limited
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+Register-ScheduledTask -TaskName {name} -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+Write-Output 'OK'
+""".format(cmd=ps_quote(command), args=ps_quote(arguments or ""), wd=ps_quote(HERE),
+           time=ps_quote(time_str), logon=logon, name=ps_quote(task_name))
 
 
 def _run(cmd):
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     except FileNotFoundError:
-        out("[X] 找不到 schtasks（这不是 Windows？）")
+        out("[X] 找不到 %s（这不是 Windows？）" % cmd[0])
         return 1
     out((proc.stdout or "").strip())
     if proc.stderr.strip():
         out((proc.stderr or "").strip())
     return proc.returncode
+
+
+def _install_via_powershell(time_str, command, arguments, s4u):
+    """第 1 条路：PowerShell Register-ScheduledTask。"""
+    out("  [1/3] 用 PowerShell 注册（能开补跑 + 电池可跑）...")
+    script = build_powershell_script(time_str, command=command, arguments=arguments,
+                                     s4u=s4u)
+    fd, ps_path = tempfile.mkstemp(suffix=".ps1")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(script.encode("utf-8-sig"))   # 带 BOM，PowerShell 认中文
+        code = _run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                     "-File", ps_path])
+    finally:
+        try:
+            os.remove(ps_path)
+        except OSError:
+            pass
+    return code
+
+
+def _install_via_xml(time_str, command, arguments, logon_type):
+    """第 2 条路：schtasks /create /xml。"""
+    out("  [2/3] 用 schtasks + XML 注册...")
+    xml = build_task_xml(time_str, command=command, arguments=arguments,
+                         logon_type=logon_type)
+    fd, xml_path = tempfile.mkstemp(suffix=".xml")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(xml.encode("utf-16"))
+        code = _run(["schtasks", "/create", "/tn", TASK_NAME, "/xml", xml_path, "/f"])
+    finally:
+        try:
+            os.remove(xml_path)
+        except OSError:
+            pass
+    return code
+
+
+def _install_via_cli(time_str, command, arguments):
+    """第 3 条路：schtasks 命令行（一定能建成，但没有补跑/电池设置）。"""
+    out("  [3/3] 用 schtasks 命令行注册（一定能成，但没有补跑/电池设置）...")
+    return _run(build_task_command(time_str, command=command, arguments=arguments))
 
 
 def install(time_str, prefer_hidden=True, s4u=False):
@@ -209,63 +305,58 @@ def install(time_str, prefer_hidden=True, s4u=False):
     out("  日志：%s" % LOG)
     out("")
 
-    # 优先走 XML：能打开「错过后补跑」和「电池上也跑」
-    code = 1
-    xml = build_task_xml(time_str, command=command, arguments=arguments,
-                         logon_type=logon_type)
-    fd, xml_path = tempfile.mkstemp(suffix=".xml")
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(xml.encode("utf-16"))
-        code = _run(["schtasks", "/create", "/tn", TASK_NAME, "/xml", xml_path, "/f"])
+    # 三条路依次尝试，哪条先成用哪条
+    method = ""
+    code = _install_via_powershell(time_str, command, arguments, s4u)
+    if code == 0:
+        method = "powershell"
+        out("")
+        out("  已开启：错过后补跑（%s 没开机，之后开机也会补一次）" % time_str)
+        out("  已开启：笔记本用电池时也能跑")
+    else:
+        out("  (PowerShell 方式没成功，换 XML 方式)")
+        code = _install_via_xml(time_str, command, arguments, logon_type)
         if code == 0:
+            method = "xml"
             out("")
             out("  已开启：错过后补跑（%s 没开机，之后开机也会补一次）" % time_str)
             out("  已开启：笔记本用电池时也能跑")
-    except Exception as exc:
-        out("  (XML 方式失败：%s，改用普通方式)" % exc)
-    finally:
-        try:
-            os.remove(xml_path)
-        except OSError:
-            pass
-
-    degraded = False
-    if code != 0:
-        degraded = True
-        out("  改用 schtasks 命令行方式 ...")
-        code = _run(build_task_command(time_str, command=command, arguments=arguments))
-        out("")
-        out("  注意：这种方式**错过不补跑**，笔记本在电池上也不会启动。")
-        if s4u:
-            out("  注意：S4U 没装上，**没登录时跑不了**。")
-            out("        要装 S4U 请用**管理员身份**打开 PowerShell 再跑一次。")
-    if code == 0:
-        out("")
-        out("[OK] 装好了。计划任务在「任务计划程序 → 任务计划程序库」里能看到。")
-        out("     想立刻试一次，在那个列表里点「运行」。")
-        out("")
-        # 下面这段必须如实反映**实际生效的方式**，别和降级情况说反
-        no_window = prefer_hidden
-        if degraded:
-            out("  运行前提：电脑开着 + 你已登录（锁屏没关系，注销/睡眠/关机就不行）。")
-            if no_window:
-                out("  这次是**无窗口**跑的：22:55 不会弹黑窗口。")
-            else:
-                out("  ⚠️ 这次会**弹黑窗口**：别在窗口上按 Ctrl+C，否则导出会被杀掉。")
-        elif s4u:
-            out("  运行前提：**电脑开着就行**（不用登录）。睡眠/关机时不会当场跑，")
-            out("            但之后开机任务计划程序会补跑一次。")
-            out("  这次是**无窗口**跑的：22:55 不会弹黑窗口。")
         else:
-            out("  运行前提：电脑开着 + 你已登录（锁屏没关系，注销/睡眠/关机就不行）。")
-            if no_window:
-                out("  这次是**无窗口**跑的：22:55 不会弹黑窗口，")
-                out("  也就没机会误按 Ctrl+C 把导出杀掉。")
-            else:
-                out("  ⚠️ 这次会**弹黑窗口**：别在窗口上按 Ctrl+C，否则导出会被杀掉。")
-        out("  微信不用开着 —— 密钥早就注入好了（除非微信升级过）。")
-        out("  网络要通（要连 MiniMax 生成摘要、飞书推结果）。")
+            out("  (XML 方式也没成功，改用命令行方式)")
+            code = _install_via_cli(time_str, command, arguments)
+            if code == 0:
+                method = "cli"
+                out("")
+                out("  注意：这种方式**错过不补跑**，笔记本在电池上也不会启动。")
+                out("        （不影响正常出日报，只是电脑在 22:55 关着的话那天就没日报）")
+
+    if code != 0:
+        out("")
+        out("[X] 三种方式都没成功，把上面的报错发我。")
+        return code
+
+    out("")
+    out("[OK] 装好了。计划任务在「任务计划程序 → 任务计划程序库」里能看到。")
+    out("     想立刻试一次，在那个列表里点「运行」。")
+    out("")
+    # 下面这段必须如实反映**实际生效的方式**，别和降级情况说反
+    no_window = prefer_hidden
+    need_login = not s4u
+    if method == "cli":
+        out("  运行前提：电脑开着 + 你已登录（锁屏没关系，注销/睡眠/关机就不行）。")
+    elif s4u:
+        out("  运行前提：**电脑开着就行**（不用登录）。睡眠/关机时不会当场跑，")
+        out("            但之后开机任务计划程序会补跑一次。")
+    else:
+        out("  运行前提：电脑开着 + 你已登录（锁屏没关系，注销/睡眠/关机就不行）。")
+        out("            睡眠/关机时不会当场跑，但之后开机任务计划程序会补跑一次。")
+    if no_window:
+        out("  这次是**无窗口**跑的：22:55 不会弹黑窗口，")
+        out("  也就没机会误按 Ctrl+C 把导出杀掉。")
+    else:
+        out("  ⚠️ 这次会**弹黑窗口**：别在窗口上按 Ctrl+C，否则导出会被杀掉。")
+    out("  微信不用开着 —— 密钥早就注入好了（除非微信升级过）。")
+    out("  网络要通（要连 MiniMax 生成摘要、飞书推结果）。")
     return code
 
 
