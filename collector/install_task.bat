@@ -3,9 +3,10 @@ REM ============================================================
 REM  WeChat Daily Report - Windows Task Scheduler installer
 REM  Pure ASCII only. Chinese messages live in install_task.py.
 REM
-REM  install_task.bat            install (default 22:55)
+REM  install_task.bat            install (default 22:55, silent, no window)
 REM  install_task.bat status     show status
 REM  install_task.bat uninstall  remove
+REM  install_task.bat install --interactive   old mode: shows a window
 REM ============================================================
 
 chcp 65001 >nul

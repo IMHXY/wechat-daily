@@ -37,7 +37,7 @@ def test_xml_shape():
         ("<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>", "转电池也不打断"),
         ("<RunOnlyIfIdle>false</RunOnlyIfIdle>", "不等空闲"),
         ("<WakeToRun>false</WakeToRun>", "不强行唤醒睡眠的电脑"),
-        ("<LogonType>InteractiveToken</LogonType>", "以登录用户身份跑"),
+        ("<LogonType>S4U</LogonType>", "后台静默跑（不弹窗口、没登录也能跑）"),
         ("<DaysInterval>1</DaysInterval>", "每天一次"),
         ("T22:55:00", "触发时间是 22:55"),
     ):
@@ -52,6 +52,24 @@ def test_xml_time():
     check("23:10 写进去了", "T23:10:00" in xml, xml[:200])
 
 
+def test_logon_type_switch():
+    """默认 S4U（不弹窗），--interactive 能退回旧模式。"""
+    print("\n[登录方式]")
+    xml = install_task.build_task_xml("22:55")
+    check("默认是 S4U（不弹黑窗口）", "<LogonType>S4U</LogonType>" in xml, xml[:200])
+    check("默认不含 InteractiveToken", "InteractiveToken" not in xml, xml[:200])
+
+    xml2 = install_task.build_task_xml("22:55", logon_type="InteractiveToken")
+    check("可退回 InteractiveToken（弹窗 + 必须已登录）",
+          "<LogonType>InteractiveToken</LogonType>" in xml2, xml2[:200])
+
+    # CLI 也要有这个开关
+    import subprocess
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "collector", "install_task.py"),
+                        "install", "--help"], capture_output=True, text=True)
+    check("install 有 --interactive 开关", "--interactive" in r.stdout, r.stdout[:300])
+
+
 def test_cli_fallback_exists():
     print("\n[命令行兜底方案还在]")
     cmd = install_task.build_task_command("22:55")
@@ -64,6 +82,7 @@ def test_cli_fallback_exists():
 if __name__ == "__main__":
     test_xml_shape()
     test_xml_time()
+    test_logon_type_switch()
     test_cli_fallback_exists()
     print("\n%s" % ("全部通过" if not FAILURES else "失败: %s" % FAILURES))
     sys.exit(1 if FAILURES else 0)

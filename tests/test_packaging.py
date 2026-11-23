@@ -110,10 +110,15 @@ def test_zip_contents():
                      "collector/install_task.bat", "collector/run_daily_logged.bat",
                      "prompts/daily_report.md"):
         check("包含 %s" % required, os.path.isfile(os.path.join(ROOT, required)))
-    for d in ("data", "reports"):
-        path = os.path.join(ROOT, d)
-        leftovers = [f for f in os.listdir(path)] if os.path.isdir(path) else []
-        check("%s 目录干净" % d, not leftovers, str(leftovers))
+    # data/ 和 reports/ 里放的是**你本机真实产生的**日报和原始记录，
+    # 机器上本来就不该是空的 —— 要保证的是它们**不会进仓库**，
+    # 而不是目录必须为空。空目录检查放到打包脚本里做。
+    ignore_text = ""
+    gi = os.path.join(ROOT, ".gitignore")
+    if os.path.isfile(gi):
+        ignore_text = open(gi, encoding="utf-8").read()
+    for d, needle in (("data", "data/"), ("reports", "reports/")):
+        check("%s/ 已在 .gitignore 里" % d, needle in ignore_text, ignore_text[:200])
 
 
 
