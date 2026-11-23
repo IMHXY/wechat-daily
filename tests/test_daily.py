@@ -120,13 +120,15 @@ def test_full_orchestration():
             env = dict(os.environ)
             _clear_feishu(env)
             env["WEIXIN_ENV_FILE"] = env_file
+            # 产物写进临时目录，别去动项目里（和用户）真实的 data/ 与 reports/
+            env["WEIXIN_HOME"] = tmp
             r = subprocess.run([sys.executable, os.path.join(COLLECTOR, "daily.py"),
                                 "--date", "2026-11-18"],
                                capture_output=True, text=True, env=env, timeout=180)
             check("daily.py 退出码 0", r.returncode == 0, (r.stdout + r.stderr)[-400:])
 
-            data_file = os.path.join(ROOT, "data", "2026-11-18.json")
-            report_file = os.path.join(ROOT, "reports", "2026-11-18.md")
+            data_file = os.path.join(tmp, "data", "2026-11-18.json")
+            report_file = os.path.join(tmp, "reports", "2026-11-18.md")
             check("生成 daily json", os.path.isfile(data_file))
             check("生成日报", os.path.isfile(report_file))
             if os.path.isfile(data_file):
@@ -137,10 +139,6 @@ def test_full_orchestration():
                       d["chats"][0]["chat_name"])
         finally:
             shutil.rmtree(tmp)
-            for p in (os.path.join(ROOT, "data", "2026-11-18.json"),
-                      os.path.join(ROOT, "reports", "2026-11-18.md")):
-                if os.path.isfile(p):
-                    os.remove(p)
     finally:
         mock.terminate()
         mock.wait(timeout=10)

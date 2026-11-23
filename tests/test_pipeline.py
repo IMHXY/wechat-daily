@@ -60,6 +60,8 @@ def test_full_pipeline():
                 "WEIXIN_BRIDGE": "http",
                 "BRIDGE_URL": "http://127.0.0.1:%d/wechat" % port,
                 "BRIDGE_REPORT_URL": "http://127.0.0.1:%d/wechat/report" % port,
+                # 产物写进临时目录，别去动项目里（和用户）真实的 data/ 与 reports/
+                "WEIXIN_HOME": tmp,
             })
             # 别让宿主环境里的真实配置干扰
             for k in ("GH_TOKEN", "GH_REPO", "FS_APP_ID", "FS_APP_SECRET", "FS_TABLE_ID", "FS_APP_TOKEN"):
@@ -79,8 +81,8 @@ def test_full_pipeline():
                 capture_output=True, text=True, env=env, cwd=COLLECTOR, timeout=180)
             check("run_daily 退出码 0", r.returncode == 0, (r.stdout + r.stderr)[-400:])
 
-            data_file = os.path.join(ROOT, "data", "2026-11-18.json")
-            report_file = os.path.join(ROOT, "reports", "2026-11-18.md")
+            data_file = os.path.join(tmp, "data", "2026-11-18.json")
+            report_file = os.path.join(tmp, "reports", "2026-11-18.md")
             check("本机有 daily json", os.path.isfile(data_file))
             check("本机有日报 md", os.path.isfile(report_file))
             if os.path.isfile(data_file):
@@ -107,11 +109,6 @@ def test_full_pipeline():
             check("调用过模型", any("chat/completions" in p for p in paths), str(paths))
         finally:
             shutil.rmtree(tmp)
-            # 清掉测试产物，别污染真实目录
-            for p in (os.path.join(ROOT, "data", "2026-11-18.json"),
-                      os.path.join(ROOT, "reports", "2026-11-18.md")):
-                if os.path.isfile(p):
-                    os.remove(p)
     finally:
         proc.terminate()
         proc.wait(timeout=10)

@@ -122,7 +122,10 @@ def test_end_to_end():
             check("日报文件生成", os.path.isfile(out))
             if os.path.isfile(out):
                 text = open(out, encoding="utf-8").read()
-                check("日报含 mock 标题", "mock" in text, text[:120])
+                check("日报含 mock 正文", "正文占位" in text, text[:120])
+                check("标题日期被脚本定死",
+                      text.splitlines()[0] == "# 微信沟通日报 · 2026-11-18",
+                      text.splitlines()[0])
 
             reqs = json.loads(urllib.request.urlopen(
                 "http://127.0.0.1:%d/requests" % port, timeout=5).read().decode())
@@ -268,6 +271,55 @@ def test_key_kind():
     check("订阅 key 的 402 提示额度窗口", "5 小时窗口" in msg2, msg2)
 
 
+def test_ensure_title():
+    """标题日期由脚本定死：模型写错也必须被纠正。"""
+    print("\n[标题日期纠正]")
+    import summarize_local
+    out = summarize_local.ensure_title(
+        "# 微信沟通日报 · 2026-10-24\n\n正文", "2026-11-22")
+    check("错误日期被覆盖", out.splitlines()[0] == "# 微信沟通日报 · 2026-11-22",
+          out.splitlines()[0])
+    check("正文保留", "正文" in out)
+    out2 = summarize_local.ensure_title("> 没有标题的日报", "2026-11-22")
+    check("缺标题就补上", out2.splitlines()[0] == "# 微信沟通日报 · 2026-11-22",
+          out2.splitlines()[0])
+    check("没有日期就不动",
+          summarize_local.ensure_title("# 微信沟通日报 · 2026-10-24", "")
+          == "# 微信沟通日报 · 2026-10-24")
+
+
+def test_date_in_prompt():
+    """日期必须出现在给模型的 prompt 里，否则模型会自己编。"""
+    print("\n[日期进 prompt]")
+    import summarize_local
+    calls = []
+
+    def fake_call(spec, user, max_tokens=None):
+        calls.append(user)
+        return "ok"
+
+    old = summarize_local.call_llm
+    summarize_local.call_llm = fake_call
+    try:
+        daily = {
+            "date": "2026-11-22",
+            "stats": {"message_count": 1, "chat_count": 1, "peak_hour": 9,
+                      "active_hours": ["09:00"]},
+            "chats": [{
+                "chat_name": "张三", "chat_type": "single", "message_count": 1,
+                "messages": [{"time": "2026-11-22 09:00:00", "sender": "张三",
+                              "is_self": False, "type": "text", "content": "在吗"}],
+            }],
+        }
+        summarize_local.summarize(daily, "spec")
+        check("prompt 里有日报日期", calls and "2026-11-22" in calls[0],
+              calls[0][:120] if calls else "no call")
+        check("prompt 里带标签", calls and "日报日期" in calls[0],
+              calls[0][:120] if calls else "no call")
+    finally:
+        summarize_local.call_llm = old
+
+
 if __name__ == "__main__":
     test_render()
     test_split()
@@ -278,5 +330,7 @@ if __name__ == "__main__":
     test_extract_text_truncated()
     test_error_hints()
     test_key_kind()
+    test_ensure_title()
+    test_date_in_prompt()
     print("\n%s" % ("全部通过" if not FAILURES else "失败: %s" % FAILURES))
     sys.exit(1 if FAILURES else 0)

@@ -392,10 +392,10 @@ def test_masked_placeholder():
     check("正常值不误判", not wechat4._is_masked("appXXX/tblYYY"))
 
     parsed = wechat4.parse_bitable_url(
-        "https://your-tenant.feishu.cn/base/appXXXXXXXXXXXX"
-        "?table=tblYYYYYYYYYYYY&view=vewZZZZZZZZ")
+        "https://qcn982eh46xg.feishu.cn/base/ZYKob61a9aZdnKsTqEfcdNujnnT"
+        "?table=tblWZw1Arahx3ZUj&view=vewAQzugcz")
     check("从网址解析出 app_token/table_id",
-          parsed == ("appXXXXXXXXXXXX", "tblYYYYYYYYYYYY"), str(parsed))
+          parsed == ("ZYKob61a9aZdnKsTqEfcdNujnnT", "tblWZw1Arahx3ZUj"), str(parsed))
     check("非表格网址返回 None",
           wechat4.parse_bitable_url("https://example.com/foo") is None)
 

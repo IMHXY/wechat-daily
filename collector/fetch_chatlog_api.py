@@ -32,6 +32,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 
 import normalize  # noqa: E402
+import bridge  # noqa: E402
 
 DEFAULT_BASE_URL = "http://127.0.0.1:5030"
 TIMEOUT = 60
@@ -267,7 +268,7 @@ def main(argv=None):
                                       include_chats=include_chats, include_max=include_max,
                                       known_chats=known_chats)
 
-        out = args.out or os.path.join(ROOT, "data", date_str + ".json")
+        out = args.out or os.path.join(bridge.data_home(), "data", date_str + ".json")
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as f:
             json.dump(daily, f, ensure_ascii=False, indent=2)

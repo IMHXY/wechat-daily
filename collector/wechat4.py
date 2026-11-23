@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 import zipfile
 
@@ -34,6 +35,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 
 import bridge  # noqa: E402
+import procutil  # noqa: E402
 
 VERSION = "v27"
 TOOLS_DIR = os.path.join(os.path.expanduser("~"), ".wechat_daily_tools")
@@ -83,6 +85,23 @@ def run(cmd, cwd=None, timeout=None, stdin_text=None, utf8_child=False):
         out("  [X] 输出解码失败")
         return 1, "", ""
     return proc.returncode, proc.stdout or "", proc.stderr or ""
+
+
+def decode_output(raw):
+    """把子进程的原始字节解成文本（见 procutil.decode_output）。"""
+    return procutil.decode_output(raw)
+
+
+def run_stream(cmd, cwd=None, timeout=None, utf8_child=False):
+    """跑子进程并实时打印它的输出（见 procutil.run_stream）。
+
+    单独拎出来是因为导出这一步最容易被误判成「卡死」——
+    capture 住输出的话，控制台上长时间一个字都不出，
+    人一急就按 Ctrl+C，导出被杀，整条流水线半路断掉。
+    2026-11-23 那天的日报就是这么丢的。
+    """
+    return procutil.run_stream(cmd, cwd=cwd, timeout=timeout,
+                               utf8_child=utf8_child, echo=out)
 
 
 def download(url, dest, timeout=600, retries=3):
@@ -559,15 +578,18 @@ DIRECTORY_FILE = "wechat_directory.json"
 
 def do_export(keeper_exe, root, out_dir, days=2):
     out("    导出最近 %d 天的聊天记录 ..." % days)
+    out("    (可能要几分钟。中间没输出不代表卡死，**别按 Ctrl+C**。)")
     os.makedirs(out_dir, exist_ok=True)
-    code, stdout, stderr = run('"%s" wechat --days %d --out "%s" --data-root "%s"'
-                               % (keeper_exe, days, out_dir, root), timeout=3600,
-                               utf8_child=True)
-    if stdout.strip():
-        out((stdout or "").strip()[-1200:])
+    code, stdout, stderr = run_stream(
+        '"%s" wechat --days %d --out "%s" --data-root "%s"'
+        % (keeper_exe, days, out_dir, root), timeout=3600)
     if code != 0:
+        out("    [X] 导出失败，退出码 %d" % code)
         if stderr.strip():
             out((stderr or "").strip()[-800:])
+        if code == 3221225786:
+            out("    退出码 3221225786 = 0xC000013A：导出被 Ctrl+C / 关窗口打断了。")
+            out("    重跑一次，中途别打断它。")
         return False
     _export_directory(keeper_exe, root, out_dir)
     return True

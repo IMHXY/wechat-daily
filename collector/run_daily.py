@@ -52,7 +52,7 @@ def main(argv=None):
     tz = normalize.get_timezone(args.tz)
     date_str = args.date or dt.datetime.now(tz).strftime("%Y-%m-%d")
 
-    root = os.path.dirname(HERE)
+    root = bridge.data_home()
     data_dir = os.path.join(root, "data")
     os.makedirs(data_dir, exist_ok=True)
     local_file = os.path.join(data_dir, date_str + ".json")

@@ -63,7 +63,7 @@
 | **飞书中转** | 原始记录和日报成品走**两条独立通道**，云端只读日报那一列 | `collector/bridge.py` |
 | **一键自检** | 缺什么、错在哪、怎么补，一条条列出来 | `collector/doctor.py` |
 | **免手抄配置** | `set` / `set-table` / `set-clip` 改配置，密钥不回显、不打码 | `collector/wechat4.py` |
-| **自动运行** | Windows 计划任务（22:55）+ 平台定时任务（23:00） | `collector/install_task.py` |
+| **自动运行** | Windows 计划任务（22:55，**无窗口不弹黑窗口**）+ 平台定时任务（23:00） | `collector/install_task.py` |
 
 ### 架构
 
@@ -181,6 +181,11 @@ install_task.bat install
 
 任务名 `WeChatDailyReport`，每天 22:55 跑，日志追加到项目根目录的 `wechat_daily.log`。
 
+装好后 **22:55 不会弹黑窗口**（任务跑的是 `pythonw.exe`）—— 所以不会再出现
+「以为卡死 → 按 Ctrl+C → 当天日报丢了」这种情况。
+
+想改成会弹窗的旧模式（只在你想盯着看进度时用）：`install_task.bat install --visible`。
+
 ### 3.4 飞书多维表格怎么建
 
 1. 打开 <https://open.feishu.cn/app> → **创建企业自建应用** → 记下 **App ID** 和 **App Secret**
@@ -226,7 +231,7 @@ mavis secret create --name=FS_TABLE_ID   --value=appXXXXXXXX/tblYYYYYYYY
 
 | 环节 | 条件 |
 |---|---|
-| 本机 22:55 | 电脑开着就行，**不用登录**（锁屏、注销都不影响，后台静默跑不弹窗） |
+| 本机 22:55 | 电脑开着 + **你已登录**（锁屏没关系）；后台静默跑，**不弹黑窗口** |
 | | 网络通（连 MiniMax + 飞书） |
 | | **微信不用开着**——密钥早注入缓存了；只有微信升级过才要开微信重跑 `setup` |
 | 平台 23:00 | 定时任务启用 + 飞书三个凭据已配 |
@@ -605,13 +610,32 @@ DAILY_INCLUDE_MAX=50
 
 | 条件 | 说明 |
 |---|---|
-| 电脑开着 | **不需要登录**（任务在后台静默跑，不弹黑窗口）；锁屏 / 注销都没影响 |
+| 电脑开着 | **需要你已登录**（锁屏没关系，注销就不行）；任务在后台静默跑，**不弹黑窗口** |
 | 睡眠 / 关机 | 这两种情况不会当场跑，但**之后开机任务计划程序会补跑一次** |
 | 网络通 | 要连 MiniMax（生成摘要）+ 飞书（推结果） |
 | 微信**不用**开着 | 密钥早就注入并缓存了；只有微信升级过才需要开微信重跑 `setup` |
 
 > 任务开了「错过后补跑」：22:55 没开机，之后开机也会补跑一次。
 > 也开了「电池上也跑」：笔记本插不插电都能跑。
+
+**为什么强调「不弹黑窗口」**：弹出来的控制台窗口最容易被人误当成卡死，
+一按 Ctrl+C 就把导出进程杀了（退出码 `0xC000013A`），整条流水线半路断掉，
+当天的日报就没了。2026-11-23 就这么丢过一次。现在任务跑的是 `pythonw.exe`
+（没有控制台），从根上避免这个问题。
+
+**想「没登录也能跑」？** 用管理员身份的 PowerShell 装一次：
+
+```bat
+cd /d C:\wechat-daily\collector
+install_task.bat install --s4u
+```
+
+S4U（不依赖登录会话）需要「作为批处理作业登录」权限，**普通用户注册会报
+`Access is denied`**。装成功的话，注销状态也能出日报；装不成功也不影响日常使用 ——
+只是要求你处于登录状态。
+
+> 想看窗口里的实时进度（比如排查导出卡在哪），用 `install_task.bat install --visible`
+> 退回会弹窗的旧模式 —— 但那样**别在窗口上按 Ctrl+C**。
 
 **平台侧（23:00）**
 
@@ -637,7 +661,9 @@ wechat-daily/
 │   ├── summarize_local.py     本机调 OpenAI 兼容接口生成日报（自动分块）
 │   ├── bridge.py              桥接：github/feishu/http，原始与日报两条独立通道
 │   ├── install_task.py / .bat Windows 计划任务（走 XML，开补跑 + 电池可跑）
-│   ├── run_daily_logged.bat   计划任务执行的包装脚本（写 wechat_daily.log）
+│   ├── run_daily_logged.py   无窗口入口：计划任务跑它（pythonw，不弹黑窗口）
+│   ├── run_daily_logged.bat  计划任务执行的包装脚本（写 wechat_daily.log）
+│   ├── procutil.py           子进程实时输出 + 超时 + 退出码翻译
 │   ├── setup_wxq.py / .bat    备选：微信 4.0 及更早的 wxq 链路
 │   ├── export_via_wxq.py      wxq 输出适配器
 │   ├── fetch_chatlog_api.py   可选：走 chatlog 系分支的 HTTP API 采集
@@ -681,7 +707,8 @@ python tests/test_summarize.py      # 本机摘要：渲染、分块、假模型
 python tests/test_pipeline.py       # 全链路：采集 → 推送 → 摘要 → 平台拉取
 python tests/test_daily.py          # 编排层：导出命令 → 归一化 → 日报
 python tests/test_scope.py          # 范围：只留我参与过的 + 裁剪 + 白名单 + 静默会话
-python tests/test_install_task.py   # 计划任务 XML：补跑、电池、静默等开关
+python tests/test_install_task.py   # 计划任务 XML：补跑、电池、无窗口、S4U 开关
+python tests/test_procutil.py       # 子进程：实时输出、超时、退出码翻译
 python tests/test_export_wxq.py     # wxq 输出适配
 python tests/test_bridge_save_env.py# 配置就地改写不丢注释
 python tests/test_packaging.py      # 打包层：.bat 纯 ASCII、Python 可编译、包内容完整

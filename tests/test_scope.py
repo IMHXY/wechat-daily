@@ -133,11 +133,14 @@ def test_cli_options():
                  "type": "text", "is_self": False},
             ], f, ensure_ascii=False)
         out = os.path.join(tmp, "daily.json")
+        # 产物写进临时目录，别去动项目里（和用户）真实的 data/ 与 reports/
+        env = dict(os.environ)
+        env["WEIXIN_HOME"] = tmp
         r = subprocess.run(
             [sys.executable, os.path.join(ROOT, "collector", "run_daily.py"),
              "--source", src, "--date", "2026-11-22", "--no-push",
              "--scope", "all", "--context-window", "-1"],
-            capture_output=True, text=True, timeout=120)
+            capture_output=True, text=True, env=env, timeout=120)
         check("退出码 0", r.returncode == 0, (r.stdout + r.stderr)[-300:])
         check("提示了范围", "全部会话" in r.stdout, r.stdout[-300:])
         check("提示了不裁剪", "不裁剪" in r.stdout, r.stdout[-300:])
@@ -146,15 +149,10 @@ def test_cli_options():
         r2 = subprocess.run(
             [sys.executable, os.path.join(ROOT, "collector", "run_daily.py"),
              "--source", src, "--date", "2026-11-22", "--no-push"],
-            capture_output=True, text=True, timeout=120)
+            capture_output=True, text=True, env=env, timeout=120)
         check("默认走 mine", "只保留我参与过的会话" in r2.stdout, r2.stdout[-300:])
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-        # run_daily.py 会往项目 data/ 写，别把测试产物留在仓库里
-        for junk in (os.path.join(ROOT, "data", "2026-11-22.json"),
-                     os.path.join(ROOT, "reports", "2026-11-22.md")):
-            if os.path.isfile(junk):
-                os.remove(junk)
 
 
 def test_config_env_scope():
@@ -175,6 +173,7 @@ def test_config_env_scope():
             f.write("DAILY_SCOPE=all\nDAILY_CONTEXT_WINDOW=-1\n")
         env = dict(os.environ)
         env["WEIXIN_ENV_FILE"] = env_file
+        env["WEIXIN_HOME"] = tmp
         r = subprocess.run(
             [sys.executable, os.path.join(ROOT, "collector", "run_daily.py"),
              "--source", src, "--date", "2026-11-22", "--no-push"],
@@ -184,10 +183,6 @@ def test_config_env_scope():
         check("读了 config.env 的窗口", "不裁剪" in r.stdout, r.stdout[-300:])
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-        for junk in (os.path.join(ROOT, "data", "2026-11-22.json"),
-                     os.path.join(ROOT, "reports", "2026-11-22.md")):
-            if os.path.isfile(junk):
-                os.remove(junk)
 
 
 

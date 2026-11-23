@@ -108,7 +108,8 @@ def test_zip_contents():
                      "collector/wechat4.py", "collector/_yara_shim.py",
                      "collector/setup.bat", "collector/install_task.py",
                      "collector/install_task.bat", "collector/run_daily_logged.bat",
-                     "prompts/daily_report.md"):
+                     "collector/run_daily_logged.py", "collector/procutil.py",
+                     "tests/test_procutil.py", "prompts/daily_report.md"):
         check("包含 %s" % required, os.path.isfile(os.path.join(ROOT, required)))
     # data/ 和 reports/ 里放的是**你本机真实产生的**日报和原始记录，
     # 机器上本来就不该是空的 —— 要保证的是它们**不会进仓库**，
@@ -119,6 +120,46 @@ def test_zip_contents():
         ignore_text = open(gi, encoding="utf-8").read()
     for d, needle in (("data", "data/"), ("reports", "reports/")):
         check("%s/ 已在 .gitignore 里" % d, needle in ignore_text, ignore_text[:200])
+
+
+def test_tests_dont_touch_real_reports():
+    """测试不能写/删项目里的 data/ 与 reports/。
+
+    以前 test_scope.py 会删掉 reports/<今天的日期>.md，
+    用户在真机上跑一次测试，当天真日报就没了。
+    现在测试一律用 WEIXIN_HOME 指到临时目录，这里防回退。
+    """
+    print("\n[测试不碰真实产物]")
+    tests_dir = os.path.join(ROOT, "tests")
+    bad = []
+    needles = ('ROOT, "data"', 'ROOT, "reports"', 'ROOT + "/data"', 'ROOT + "/reports"')
+    for name in sorted(os.listdir(tests_dir)):
+        if not name.endswith(".py") or name == os.path.basename(__file__):
+            continue  # 这个文件自己就带着这些字符串
+        path = os.path.join(tests_dir, name)
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+        for needle in needles:
+            if needle in text:
+                bad.append("%s: %s" % (name, needle))
+    check("测试不引用项目里的 data//reports/", not bad, "; ".join(bad))
+
+    # 真正跑一次，确认产物落在 WEIXIN_HOME 里而不是项目目录
+    import bridge
+    tmp = tempfile.mkdtemp()
+    try:
+        old = os.environ.get("WEIXIN_HOME")
+        os.environ["WEIXIN_HOME"] = tmp
+        try:
+            home = bridge.data_home()
+            check("WEIXIN_HOME 生效", home == tmp, home)
+        finally:
+            if old is None:
+                os.environ.pop("WEIXIN_HOME", None)
+            else:
+                os.environ["WEIXIN_HOME"] = old
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 
@@ -216,7 +257,10 @@ def test_task_command():
     check("强制覆盖", "/f" in cmd, str(cmd))
     tr = cmd[cmd.index("/tr") + 1]
     check("执行路径带引号（路径有空格也安全）",
-          tr.startswith('"') and tr.endswith('"') and "run_daily_logged.bat" in tr, tr)
+          tr.startswith('"') and tr.endswith('"'), tr)
+    # 默认走 pythonw（无窗口）；找不到 pythonw 时退回 bat
+    check("执行的是无窗口入口（pythonw -> run_daily_logged.py）或 bat 兜底",
+          ("run_daily_logged.py" in tr) or ("run_daily_logged.bat" in tr), tr)
     check("wrapper 存在", os.path.isfile(install_task.WRAPPER))
     check("日志路径在项目根", install_task.LOG.endswith("wechat_daily.log"),
           install_task.LOG)
@@ -229,6 +273,7 @@ if __name__ == "__main__":
     test_no_chinese_in_bat()
     test_task_command()
     test_zip_contents()
+    test_tests_dont_touch_real_reports()
     test_license()
     test_gitignore()
     test_no_leaked_identifiers()

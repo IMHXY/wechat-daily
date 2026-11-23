@@ -94,6 +94,16 @@ def _env(name, default=""):
     return os.environ.get(name, default).strip()
 
 
+def data_home():
+    """data/ 和 reports/ 所在目录（默认为项目根）。
+
+    设 WEIXIN_HOME 可以把产物写到别处——测试用它指向临时目录，
+    免得测试去动用户真实的日报文件。
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.environ.get("WEIXIN_HOME", "").strip() or root
+
+
 def load_env(path=None):
     """读取项目根目录的 config.env（KEY=VALUE），已存在的环境变量优先，不覆盖。
 

@@ -31,6 +31,15 @@ sys.path.insert(0, HERE)
 import bridge  # noqa: E402
 import normalize  # noqa: E402
 
+
+def data_home():
+    """data/ 和 reports/ 所在目录。
+
+    设 WEIXIN_HOME 可以把产物写到别处——测试用它指向临时目录，
+    免得测试去动用户真实的日报文件。
+    """
+    return bridge.data_home()
+
 DEFAULT_BASE_URL = "https://api.minimax.cn/v1"
 DEFAULT_MODEL = "MiniMax-M3.1-Flash"
 MAX_INPUT_CHARS = 30000      # 单次请求的聊天文本上限
@@ -358,6 +367,9 @@ def summarize(daily, spec, verbose=True):
     if not chats:
         raise RuntimeError("没有聊天内容可总结")
 
+    # 日期必须显式喂给模型：聊天正文里只有 HH:MM，模型看不到年月日，
+    # 让它自己填标题日期就会凭空编一个出来。
+    date_str = daily.get("date", "")
     blocks = [render_chat(c) for c in chats]
     total = sum(len(b) for b in blocks)
 
@@ -365,7 +377,9 @@ def summarize(daily, spec, verbose=True):
         transcript = "\n\n".join(blocks)
         if verbose:
             print("[summarize] 单轮总结（%d 字）" % len(transcript))
-        return call_llm(spec, "统计：%s\n\n今天的聊天记录：\n\n%s" % (render_stats(daily), transcript),
+        return call_llm(spec,
+                        "日报日期：%s\n\n统计：%s\n\n今天的聊天记录：\n\n%s"
+                        % (date_str, render_stats(daily), transcript),
                         max_tokens=16384)
 
     # 分块：先按会话切，每块再按长度切，逐块要点化，最后合并
@@ -383,9 +397,25 @@ def summarize(daily, spec, verbose=True):
     if verbose:
         print("[summarize] 合并 %d 份要点" % len(notes))
     return call_llm(spec,
-                     "统计：%s\n\n以下是各会话的要点，请合并成一份日报：\n\n%s"
-                     % (render_stats(daily), merged),
+                     "日报日期：%s\n\n统计：%s\n\n以下是各会话的要点，请合并成一份日报：\n\n%s"
+                     % (date_str, render_stats(daily), merged),
                      max_tokens=16384)
+
+
+def ensure_title(report, date_str):
+    """标题里的日期由脚本定死，不让模型自己编。
+
+    模型即使在「日报日期」之外又写错日期，这里也会覆盖成真实日期。
+    """
+    if not date_str:
+        return report
+    title = "# 微信沟通日报 · %s" % date_str
+    lines = report.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("# "):
+            lines[i] = title
+            return "\n".join(lines)
+    return title + "\n\n" + report
 
 
 def main(argv=None):
@@ -408,9 +438,10 @@ def main(argv=None):
     tz = normalize.get_timezone(os.environ.get("WEIXIN_TZ", "Asia/Shanghai"))
     date_str = args.date or dt.datetime.now(tz).strftime("%Y-%m-%d")
 
-    data_path = args.data or os.path.join(ROOT, "data", date_str + ".json")
+    home = data_home()
+    data_path = args.data or os.path.join(home, "data", date_str + ".json")
     spec_path = args.spec or os.path.join(ROOT, "prompts", "daily_report.md")
-    out_path = args.out or os.path.join(ROOT, "reports", date_str + ".md")
+    out_path = args.out or os.path.join(home, "reports", date_str + ".md")
 
     if not os.path.isfile(data_path):
         sys.stderr.write("[error] 没有数据文件：%s（先跑采集）\n" % data_path)
@@ -429,6 +460,8 @@ def main(argv=None):
     except Exception as exc:
         sys.stderr.write("[error] %s\n" % exc)
         return 1
+
+    report = ensure_title(report, daily.get("date") or date_str)
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:

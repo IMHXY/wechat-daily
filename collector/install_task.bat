@@ -6,7 +6,9 @@ REM
 REM  install_task.bat            install (default 22:55, silent, no window)
 REM  install_task.bat status     show status
 REM  install_task.bat uninstall  remove
-REM  install_task.bat install --interactive   old mode: shows a window
+REM  install_task.bat install --visible   old mode: shows a window
+REM  install_task.bat install --s4u       also run when not logged in
+REM                                          (needs Administrator rights)
 REM ============================================================
 
 chcp 65001 >nul
