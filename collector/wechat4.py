@@ -1081,7 +1081,10 @@ def cmd_scope(args):
     out("    DAILY_INCLUDE_CHATS = %s" % (include_chats or "(空)"))
     if include_chats:
         out("      ↑ 白名单：这些群不管你说不说话都进日报（群名包含关键字即命中）")
-        out("      ↑ 我不在里面说话时，最多保留最近 %d 条" % include_max)
+        if include_max > 0:
+            out("      ↑ 我不在里面说话时，最多保留最近 %d 条" % include_max)
+        else:
+            out("      ↑ 我不在里面说话时，一条都不保留（include_max = 0）")
     out("")
 
     if getattr(args, "preview", False):

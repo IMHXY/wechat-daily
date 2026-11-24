@@ -326,6 +326,14 @@ set_scope.bat
 | `set_scope.bat show` | 看当前范围设置 |
 | `set_scope.bat clear` | 清空白名单 |
 | `set_scope.bat preview` | 预览今天哪些会话会进日报 |
+| `set_scope.bat window 20` | **上下文窗口**改成 20（我发言前后各留 20 条） |
+| `set_scope.bat window 0` | 只留我自己的消息 |
+| `set_scope.bat window -1` | 不裁剪，全留 |
+| `set_scope.bat max 20` | **白名单群**我不在里面说话时，最多保留最近 20 条 |
+| `set_scope.bat max 0` | 白名单群我不在里面说话时，一条都不带进日报 |
+
+> `window` 越大 → 我每句话前后的上下文带得越多（信息更全，但喂给模型的字也更多）。
+> `max` 越小 → 白名单群灌进日报的消息越少（省字，也更安静）。
 
 > 写**关键字**比写全名省事：写「骑行」就能命中「周末骑行群」「城市骑行小队」。
 > `collector\include.txt` 已在 `.gitignore` 里 —— 你的真实群名不会被提交到 GitHub。

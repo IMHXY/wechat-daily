@@ -605,6 +605,9 @@ def build_daily(msgs, date_str, tz, tz_name, self_aliases, name_map=None,
 
     chats = []
     kept_msgs = 0
+    # 白名单群里我没说话、又被 include_max 削成 0 条的：整个不进日报。
+    # 但它今天确实有消息，所以不能当成「静默群」再列一条出来（那是两回事）。
+    excluded = set()
     for chat_name, items in sorted(groups.items(), key=lambda kv: -len(kv[1])):
         items.sort(key=lambda x: x["ts"])
         orig_len = len(items)
@@ -621,7 +624,15 @@ def build_daily(msgs, date_str, tz, tz_name, self_aliases, name_map=None,
                 and include_max is not None and include_max >= 0 \
                 and len(items) > include_max:
             # 白名单强制纳入、但我一句都没说 -> 取最近 N 条，别把长群整个灌进模型
-            items = items[-include_max:]
+            if include_max > 0:
+                items = items[-include_max:]
+            else:
+                # 注意：items[-0:] 等于整个列表（不是空），所以 0 必须单独处理
+                items = []
+                excluded.add(chat_name)
+        if chat_name in excluded:
+            # 白名单群 + include_max=0：整个会话不进日报（也别当静默群列出来）
+            continue
         msgs_out = []
         for m in items:
             local = m["local"]
@@ -648,7 +659,7 @@ def build_daily(msgs, date_str, tz, tz_name, self_aliases, name_map=None,
     if include_chats and known_chats:
         seen = {c["chat_name"] for c in chats}
         for label, info in known_chats.items():
-            if label in seen or not _include_match(label, include_chats):
+            if label in seen or label in excluded or not _include_match(label, include_chats):
                 continue
             chats.append({
                 "chat_name": label,

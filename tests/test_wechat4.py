@@ -562,6 +562,10 @@ def test_set_scope_bat():
     check("切了 UTF-8 代码页", "chcp 65001" in text, text[:200])
     check("调的是 --include-file", "--include-file" in text, text[:200])
     check("文件不存在时会给示例", "include.example.txt" in text, text[:200])
+    # 上下文窗口 / 白名单上限也要能用 bat 改
+    check("有 window 子命令", "--window" in text and '"window"' in text, text[:400])
+    check("有 max 子命令", "--include-max" in text and '"max"' in text, text[:400])
+    check("缺数字时会提示", "neednum" in text, text[:400])
 
 
 if __name__ == "__main__":

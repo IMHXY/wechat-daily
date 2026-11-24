@@ -348,6 +348,32 @@ def test_include_chats_whitelist():
     check("关键字子串命中 XX项目组群", "XX项目组群" in names, str(names))
 
 
+def test_include_max_zero():
+    """include_max=0：白名单群我不说话时，一条都不进日报。
+
+    踩过的坑：items[-0:] 等于整个列表（不是空），
+    所以「保留 0 条」原来会变成「全留」——比不改还糟。
+    """
+    print("\n[include_max=0：白名单群一条都不保留]")
+    msgs = _wl_msgs()
+    d = normalize.build_daily(msgs, "2026-11-22", TZ, "Asia/Shanghai", {"我"},
+                               only_mine=True, context_window=5,
+                               include_chats="拼单群", include_max=0)
+    names = [c["chat_name"] for c in d["chats"]]
+    check("白名单群整个不进来了", "拼单群" not in names, str(names))
+    check("也不被当成「静默群」列出来",
+          not any(c.get("silent") and c["chat_name"] == "拼单群"
+                  for c in d["chats"]), str(names))
+    check("我说话的群不受影响", "项目组群" in names, str(names))
+
+    # 对照：include_max=1 时只留最近 1 条
+    d1 = normalize.build_daily(msgs, "2026-11-22", TZ, "Asia/Shanghai", {"我"},
+                                only_mine=True, context_window=5,
+                                include_chats="拼单群", include_max=1)
+    wl = [c for c in d1["chats"] if c["chat_name"] == "拼单群"][0]
+    check("include_max=1 留 1 条", wl["message_count"] == 1, str(wl["message_count"]))
+
+
 def test_include_chats_preview():
     print("\n[白名单在预览里标出来]")
     msgs = _wl_msgs()
@@ -486,6 +512,7 @@ if __name__ == "__main__":
     test_scope_preview_runs_export()
     test_version_flag()
     test_include_chats_whitelist()
+    test_include_max_zero()
     test_include_chats_preview()
     test_scope_command_include()
     test_silent_whitelisted_chat()
