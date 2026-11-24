@@ -568,6 +568,25 @@ def test_set_scope_bat():
     check("缺数字时会提示", "neednum" in text, text[:400])
 
 
+def test_regen_reports_bat():
+    """regen_reports.bat 必须纯 ASCII，且流程是「拉归档 -> 重排 -> 回写」。"""
+    print("\n[regen_reports.bat]")
+    path = os.path.join(ROOT, "collector", "regen_reports.bat")
+    check("有 regen_reports.bat", os.path.isfile(path))
+    if not os.path.isfile(path):
+        return
+    raw = open(path, "rb").read()
+    bad = [(i, b) for i, b in enumerate(raw) if b > 127]
+    check("纯 ASCII", not bad,
+          "第 %d 字节: %s" % (bad[0][0], bad[0][1]) if bad else "")
+    text = raw.decode("ascii")
+    check("切了 UTF-8 代码页", "chcp 65001" in text, text[:200])
+    check("先拉归档", "bridge.py pull" in text, text[:400])
+    check("再重排", "summarize_local.py" in text, text[:400])
+    check("回写日报列", "--push" in text, text[:400])
+    check("不带参数时取前两天", "timedelta(days=1)" in text, text[:600])
+
+
 if __name__ == "__main__":
     test_find_root()
     test_cli_contract()
@@ -589,5 +608,6 @@ if __name__ == "__main__":
     test_download_recovery()
     test_include_file()
     test_set_scope_bat()
+    test_regen_reports_bat()
     print("\n%s" % ("全部通过" if not FAILURES else "失败: %s" % FAILURES))
     sys.exit(1 if FAILURES else 0)
