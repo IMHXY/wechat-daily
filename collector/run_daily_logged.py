@@ -34,6 +34,51 @@ def timestamp():
     return now.strftime("%a %Y/%m/%d %H:%M:%S") + ".%03d" % (now.microsecond // 1000)
 
 
+class Tee(io.TextIOBase):
+    """同时写到日志文件**和**原来的控制台。
+
+    计划任务用 pythonw 跑，没有控制台（console 为 None）→ 只进日志文件。
+    手动在命令行跑时，屏幕上也照样能实时看到进度 ——
+    否则手动跑一次「什么反应都没有」，根本没法判断是跑完了还是卡住了。
+    """
+
+    def __init__(self, log, console):
+        self._log = log
+        self._console = console
+
+    # --- 写 ---
+    def write(self, s):
+        try:
+            self._log.write(s)
+        except Exception:
+            pass
+        if self._console is not None:
+            try:
+                self._console.write(s)
+                self._console.flush()
+            except Exception:
+                pass
+        return len(s)
+
+    def flush(self):
+        for f in (self._log, self._console):
+            try:
+                if f is not None:
+                    f.flush()
+            except Exception:
+                pass
+
+    def isatty(self):
+        return False
+
+    def fileno(self):
+        return self._log.fileno()
+
+    @property
+    def encoding(self):
+        return "utf-8"
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     os.makedirs(ROOT, exist_ok=True)
@@ -41,8 +86,10 @@ def main(argv=None):
 
     # pythonw.exe 启动的进程里 sys.stdout / sys.stderr 是 None，
     # 所以这里无条件换成日志文件，不能指望原来那两个。
-    sys.stdout = log
-    sys.stderr = log
+    # 有控制台时用 Tee 兼顾屏幕（手动跑要看得见），没有就只写日志。
+    orig_out, orig_err = sys.stdout, sys.stderr
+    sys.stdout = Tee(log, orig_out)
+    sys.stderr = Tee(log, orig_err)
     try:
         sys.stdin = io.open(os.devnull, "r", encoding="utf-8")
     except OSError:

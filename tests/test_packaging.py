@@ -109,7 +109,8 @@ def test_zip_contents():
                      "collector/setup.bat", "collector/install_task.py",
                      "collector/install_task.bat", "collector/run_daily_logged.bat",
                      "collector/run_daily_logged.py", "collector/procutil.py",
-                     "tests/test_procutil.py", "prompts/daily_report.md"):
+                     "tests/test_procutil.py", "tests/test_run_daily_logged.py",
+                     "prompts/daily_report.md"):
         check("包含 %s" % required, os.path.isfile(os.path.join(ROOT, required)))
     # data/ 和 reports/ 里放的是**你本机真实产生的**日报和原始记录，
     # 机器上本来就不该是空的 —— 要保证的是它们**不会进仓库**，
