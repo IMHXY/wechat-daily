@@ -98,7 +98,22 @@ def main(argv=None):
           % (local_file, daily["stats"]["message_count"], daily["stats"]["chat_count"]))
 
     if daily["stats"]["message_count"] == 0:
-        print("[warn] 这一天没有解析到任何消息，检查 --date 和 --source")
+        # 光说「没解析到消息」没用，要把「导出里到底有哪些日期」摆出来。
+        # 常见情况是「早上 8 点跑，当天确实一条都还没有」—— 那不是故障。
+        hist = normalize.date_histogram(msgs, tz)
+        if hist:
+            print("[warn] 这一天（%s）没有消息。" % date_str)
+            print("       导出文件里实际有的日期：")
+            for day, n in sorted(hist.items()):
+                mark = "   ← 就是今天" if day == date_str else ""
+                print("         %s   %d 条%s" % (day, n, mark))
+            if date_str not in hist:
+                print("       → 当天确实还没有消息，等有了再跑就行（不是故障）。")
+            else:
+                print("       → 有这天的消息却被过滤掉了，多半是「只保留我参与过的会话」"
+                      "把它筛没了，可以加 --scope all 看看。")
+        else:
+            print("[warn] 这一天没有解析到任何消息，检查 --date 和 --source")
         return 1
 
     if args.no_push:

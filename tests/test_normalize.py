@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """归一化层的自测：python3 tests/test_normalize.py"""
 
+import datetime as dt
 import json
 import os
 import shutil
@@ -264,6 +265,25 @@ def test_probe():
         shutil.rmtree(tmp)
 
 
+def test_date_histogram():
+    """按天统计条数 —— 用来回答「为什么这一天是 0 条？」。
+
+    2026-11-24 早上 8 点演练时导出 851 条，但当天一条都没有，
+    旧提示只有一句「没有解析到任何消息，检查 --date 和 --source」，
+    看不出「其实是当天还没消息」。这个统计就是给那句话配的证据。
+    """
+    print("\n[按天统计]")
+    tz = normalize.get_timezone("Asia/Shanghai")
+    day = dt.datetime(2026, 11, 23, 10, 0, 0).timestamp()
+    night = dt.datetime(2026, 11, 23, 23, 30, 0).timestamp()
+    early = dt.datetime(2026, 11, 24, 7, 0, 0).timestamp()
+    msgs = [{"ts": day}, {"ts": day}, {"ts": night}, {"ts": early}]
+    hist = normalize.date_histogram(msgs, tz)
+    check("11-23 有 3 条", hist.get("2026-11-23") == 3, str(hist))
+    check("11-24 有 1 条", hist.get("2026-11-24") == 1, str(hist))
+    check("空列表返回空", normalize.date_histogram([], tz) == {}, "")
+
+
 if __name__ == "__main__":
     test_chat_name_from_path()
     test_name_map()
@@ -276,5 +296,6 @@ if __name__ == "__main__":
     test_markdown()
     test_generic_alias()
     test_empty_day()
+    test_date_histogram()
     print("\n%s" % ("全部通过" if not FAILURES else "失败: %s" % FAILURES))
     sys.exit(1 if FAILURES else 0)

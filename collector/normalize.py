@@ -545,6 +545,23 @@ def _include_match(chat_name, include_chats):
 
 
 
+def date_histogram(msgs, tz):
+    """按天统计消息条数：{日期: 条数}。
+
+    用来回答「为什么这一天是 0 条？」——
+    是当天真没消息，还是字段没认出来导致一条都没解析出来。
+    """
+    hist = {}
+    for m in msgs:
+        try:
+            local = dt.datetime.fromtimestamp(m["ts"], tz)
+        except Exception:
+            continue
+        key = local.strftime("%Y-%m-%d")
+        hist[key] = hist.get(key, 0) + 1
+    return hist
+
+
 def build_daily(msgs, date_str, tz, tz_name, self_aliases, name_map=None,
                  only_mine=True, context_window=5, include_chats=None,
                  include_max=50, known_chats=None):
