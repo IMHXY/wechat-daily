@@ -452,6 +452,43 @@ def ensure_overview(report, daily):
     return "\n".join([title, "", line, ""] + body)
 
 
+def fix_invalid_dates(report):
+    """把日历上不存在的日期（比如「11月34」）换成「未指定」。
+
+    模型偶尔会拼出「11月34」这种日期。写进日报就是假信息，
+    而这种纯格式问题机器查得比模型准 —— 提示词说了「不编造日期」，
+    但光靠提示词不够，还得有道兜底的闸。
+    """
+    import calendar
+    import re
+
+    def repl(m):
+        month, day = int(m.group(1)), int(m.group(2))
+        if 1 <= month <= 12 and 1 <= day <= calendar.monthrange(2024, month)[1]:
+            return m.group(0)
+        return "未指定"
+
+    return re.sub(r"(\d{1,2})\s*月\s*(\d{1,2})\s*日?", repl, report)
+
+
+def fix_suspicious_times(report):
+    """待办行里孤零零一个时钟时间（如「16:01」）换成「未指定」。
+
+    模型偶尔把**消息的发送时间**当成截止时间填进时间点 ——
+    那等于凭空造了个 deadline，比不写更糟。
+    真的约定时间一般带日期（「周六 08:00 集合」）或带「前/后」，
+    只有 HH:MM 一个数孤零零的，多半是消息时间戳。
+    """
+    import re
+    pattern = re.compile(
+        r"(——\s*[^，\n]*?，)\s*(\d{1,2}:\d{2})\s*(（[^）\n]*）)?\s*$", re.M)
+
+    def repl(m):
+        return m.group(1) + "未指定" + (m.group(3) or "")
+
+    return pattern.sub(repl, report)
+
+
 def main(argv=None):
     bridge.load_env()
     try:
@@ -497,6 +534,8 @@ def main(argv=None):
 
     report = ensure_title(report, daily.get("date") or date_str)
     report = ensure_overview(report, daily)
+    report = fix_invalid_dates(report)
+    report = fix_suspicious_times(report)
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:

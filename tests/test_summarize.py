@@ -299,6 +299,45 @@ def test_ensure_overview():
     check("没标题时不乱动", out2 == "正文", repr(out2))
 
 
+def test_fix_invalid_dates():
+    """日历上不存在的日期（11月34）一律换成「未指定」。"""
+    print("\n[假日期被拦下]")
+    out = summarize_local.fix_invalid_dates(
+        "• 联系郭俊红确认报考资格 —— 陈莉，11月34（我承诺）")
+    check("11月34 -> 未指定", "未指定" in out and "11月34" not in out, out)
+    for good in ("11月24日", "12月31日", "2月28日", "1月3日", "10月1日"):
+        out2 = summarize_local.fix_invalid_dates("截止 %s" % good)
+        check("正常日期不动：%s" % good, good in out2, out2)
+    out3 = summarize_local.fix_invalid_dates("2月30日")
+    check("2月30日 -> 未指定", "未指定" in out3, out3)
+    out4 = summarize_local.fix_invalid_dates("3月份的材料")
+    check("「3月份」不是日期，不动", "3月份" in out4, out4)
+
+
+def test_fix_suspicious_times():
+    """待办行里孤零零的时钟时间（消息发送时间）换成「未指定」。"""
+    print("\n[消息时间不冒充截止时间]")
+    out = summarize_local.fix_suspicious_times(
+        "• 定本周六首次课 —— 陈莉，16:01（双方确认）")
+    check("16:01 -> 未指定", "未指定" in out and "16:01" not in out, out)
+
+    out2 = summarize_local.fix_suspicious_times(
+        "• 参加骑行 —— 周末骑行群，周六早八点集合（我承诺）")
+    check("带日期的约定时间不动", "周六早八点集合" in out2, out2)
+
+    out3 = summarize_local.fix_suspicious_times(
+        "• 打印材料 —— 温，明日12:00前送达（温承诺）")
+    check("带「前」的约定时间不动", "明日12:00前送达" in out3, out3)
+
+    out4 = summarize_local.fix_suspicious_times(
+        "489 条消息 · 66 个会话 · 高峰 9 时 · 活跃 08:47-21:30")
+    check("概览行的时段不动", "08:47-21:30" in out4, out4)
+
+    out5 = summarize_local.fix_suspicious_times(
+        "• 补签班管册 —— 刘珍妮，10:36（我承诺）")
+    check("10:36 -> 未指定", "未指定" in out5 and "10:36" not in out5, out5)
+
+
 def test_ensure_title():
     """标题日期由脚本定死：模型写错也必须被纠正。"""
     print("\n[标题日期纠正]")
@@ -360,6 +399,8 @@ if __name__ == "__main__":
     test_key_kind()
     test_ensure_title()
     test_ensure_overview()
+    test_fix_invalid_dates()
+    test_fix_suspicious_times()
     test_date_in_prompt()
     print("\n%s" % ("全部通过" if not FAILURES else "失败: %s" % FAILURES))
     sys.exit(1 if FAILURES else 0)
