@@ -353,11 +353,11 @@ def call_llm(system_prompt, user_prompt, max_tokens=4096):
 # ---------------------------------------------------------------- 主流程
 
 CHUNK_PROMPT = """你在整理一天的微信沟通记录。下面是某个会话的聊天片段。
-请只提炼事实性要点，用中文简��列表输出：
-1) 关键进展：发生了什么、结论是什么
-2) 待办与承诺：谁答应了什么、涉及什么时间点
-3) 需要跟进的人：谁、为什么
-4) 值得留意：风险、冲突、没落实的事
+请只提炼事实性要点，用中文简洁列表输出：
+1) 要做的事：谁答应了什么、涉及什么时间点
+2) 进展：发生了什么、结论是什么
+3) 要留意的：风险、冲突、没落实的事
+4) 日常：一句话概括这个会话聊了什么
 
 只写片段里真实出现的内容，不推断人名、日期和承诺；信息不足就不写这一项。不要评价人。"""
 
@@ -418,6 +418,40 @@ def ensure_title(report, date_str):
     return title + "\n\n" + report
 
 
+def ensure_overview(report, daily):
+    """第二行的概览数字由脚本摆正。
+
+    概览要放在**最前面**（读者最先看到的），但模型不一定照做，
+    所以落盘前统一摆正：标题 -> 空行 -> 概览 -> 空行 -> 正文。
+    """
+    s = daily.get("stats", {}) or {}
+    hours = s.get("active_hours") or []
+    span = "%s-%s" % (hours[0], hours[-1]) if hours else "-"
+    line = "%s 条消息 · %s 个会话 · 高峰 %s 时 · 活跃 %s" % (
+        s.get("message_count", 0), s.get("chat_count", 0),
+        s.get("peak_hour", "-"), span)
+
+    lines = report.splitlines()
+    title_idx = None
+    for i, l in enumerate(lines):
+        if l.startswith("# "):
+            title_idx = i
+            break
+    if title_idx is None:
+        return report
+    title = lines[title_idx]
+
+    body = lines[title_idx + 1:]
+    # 去掉模型自己写的概览行（短行 + 同时含两个关键词才算）
+    body = [l for l in body
+            if not (len(l.strip()) <= 90 and "条消息" in l and "个会话" in l)]
+    while body and not body[0].strip():
+        body.pop(0)
+    while body and not body[-1].strip():
+        body.pop()
+    return "\n".join([title, "", line, ""] + body)
+
+
 def main(argv=None):
     bridge.load_env()
     try:
@@ -462,6 +496,7 @@ def main(argv=None):
         return 1
 
     report = ensure_title(report, daily.get("date") or date_str)
+    report = ensure_overview(report, daily)
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:

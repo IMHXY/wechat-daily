@@ -268,6 +268,34 @@ def test_task_command():
           install_task.LOG)
 
 
+def test_readme_sample_in_sync():
+    """README 里展示的日报样例必须和 sample/ 里的逐字一致。
+
+    日报格式改过好几轮，每次都靠手动同步 README 和样例，很容易漏 ——
+    这里钉死，省得 README 展示的是旧格式。
+    """
+    print("\n[README 与样例一致]")
+    readme_path = os.path.join(ROOT, "README.md")
+    sample_path = os.path.join(ROOT, "sample", "2026-11-18.report.md")
+    check("有样例文件", os.path.isfile(sample_path))
+    if not os.path.isfile(sample_path):
+        return
+    readme = open(readme_path, encoding="utf-8").read()
+    sample = open(sample_path, encoding="utf-8").read().rstrip("\n")
+    i = readme.find("### 5.3")
+    check("README 有 5.3 节", i >= 0)
+    if i < 0:
+        return
+    start = readme.find("```markdown", i)
+    end = readme.find("\n```", start + 3)
+    check("5.3 里有 markdown 代码块", start >= 0 and end > start)
+    if start < 0 or end <= start:
+        return
+    block = readme[start + len("```markdown\n"):end]
+    check("样例逐字一致", block == sample,
+          "README 和 sample/2026-11-18.report.md 不一致了")
+
+
 if __name__ == "__main__":
     test_bat_ascii()
     test_python_compiles()
@@ -279,5 +307,6 @@ if __name__ == "__main__":
     test_license()
     test_gitignore()
     test_no_leaked_identifiers()
+    test_readme_sample_in_sync()
     print("\n%s" % ("全部通过" if not FAILURES else "失败: %s" % FAILURES))
     sys.exit(1 if FAILURES else 0)

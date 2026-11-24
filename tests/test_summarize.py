@@ -137,7 +137,7 @@ def test_end_to_end():
                 user = user_msgs[0]["content"] if user_msgs else ""
                 check("prompt 含聊天内容", "在吗" in user, user[:120])
                 check("prompt 含统计", "消息 2 条" in user)
-                check("prompt 含规范", "关键进展" in body["messages"][0]["content"],
+                check("prompt 含规范", "要做的事" in body["messages"][0]["content"],
                       body["messages"][0]["content"][:120])
                 check("模型名正确", body.get("model") == "MiniMax-M3.1-Flash", str(body.get("model")))
                 check("带 reasoning_effort", body.get("reasoning_effort") == "medium",
@@ -271,6 +271,34 @@ def test_key_kind():
     check("订阅 key 的 402 提示额度窗口", "5 小时窗口" in msg2, msg2)
 
 
+def test_ensure_overview():
+    """概览数字由脚本摆正：模型放错位置也会被拉回第二行。"""
+    print("\n[概览行摆正]")
+    daily = {"date": "2026-11-22", "stats": {
+        "message_count": 30, "chat_count": 4,
+        "peak_hour": 21, "active_hours": ["09:00", "22:10"]}}
+    want = "30 条消息 · 4 个会话 · 高峰 21 时 · 活跃 09:00-22:10"
+
+    # 模型照做 -> 不变
+    ok = "# 微信沟通日报 · 2026-11-22\n\n%s\n\n正文" % want
+    out = summarize_local.ensure_overview(ok, daily)
+    check("位置正确时不动它", out == ok, repr(out))
+
+    # 模型把概览写到最后 -> 拉到第二行，并删掉原来那条
+    bad = ("# 微信沟通日报 · 2026-11-22\n\n正文\n\n"
+           "消息 30 条 · 进日报 4 个会话 · 高峰 21 时 · 活跃时段 09:00 ~ 22:10")
+    out = summarize_local.ensure_overview(bad, daily)
+    lines = out.splitlines()
+    check("概览在第二行", lines[2] == want, repr(lines[:4]))
+    check("正文还在", "正文" in out, repr(out))
+    check("旧概览不重复", out.count("条消息") == 1, repr(out))
+    check("标题在最前", lines[0].startswith("# 微信沟通日报"), lines[0])
+
+    # 没有标题 -> 原样返回（ensure_title 负责补标题）
+    out2 = summarize_local.ensure_overview("正文", daily)
+    check("没标题时不乱动", out2 == "正文", repr(out2))
+
+
 def test_ensure_title():
     """标题日期由脚本定死：模型写错也必须被纠正。"""
     print("\n[标题日期纠正]")
@@ -331,6 +359,7 @@ if __name__ == "__main__":
     test_error_hints()
     test_key_kind()
     test_ensure_title()
+    test_ensure_overview()
     test_date_in_prompt()
     print("\n%s" % ("全部通过" if not FAILURES else "失败: %s" % FAILURES))
     sys.exit(1 if FAILURES else 0)
