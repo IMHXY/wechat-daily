@@ -308,6 +308,28 @@ python collector\wechat4.py scope --clear-include
 python collector\wechat4.py scope --reset
 ```
 
+**中文群名用 bat 设（推荐）**：群名一般是中文，而 `.bat` 必须是纯 ASCII
+（cmd 用系统代码页 GBK 读 UTF-8 的 bat 会把命令解析搞崩）。所以走一个
+UTF-8 文本文件，由 Python 来读：
+
+```bat
+cd /d C:\wechat-daily\collector
+set_scope.bat
+```
+
+`set_scope.bat` 会用记事本打开 `collector\include.txt`（**每行一个群名**，
+`#` 开头是注释，空行忽略），你写好保存关掉，它立刻写进 `config.env` 并生效。
+
+| 命令 | 作用 |
+|---|---|
+| `set_scope.bat` | 打开记事本编辑白名单，保存后自动生效 |
+| `set_scope.bat show` | 看当前范围设置 |
+| `set_scope.bat clear` | 清空白名单 |
+| `set_scope.bat preview` | 预览今天哪些会话会进日报 |
+
+> 写**关键字**比写全名省事：写「骑行」就能命中「周末骑行群」「城市骑行小队」。
+> `collector\include.txt` 已在 `.gitignore` 里 —— 你的真实群名不会被提交到 GitHub。
+
 > 白名单群「今天没人发言也进日报」靠导出时多跑一次 `chatlog-keeper directory`
 > （只列会话名，不读消息内容），产出 `EXPORT_DIR/wechat_directory.json`。
 > 没这个文件时行为不变，不会凭空造会话。
@@ -323,6 +345,7 @@ python collector\wechat4.py scope --reset
 | `wechat4.py set-table <网址>` | 从飞书网址解析 app_token/table_id |
 | `wechat4.py set-clip KEY ...` | 从剪贴板读值写进配置 |
 | `wechat4.py scope [--preview]` | 查看/调整日报范围 |
+| `set_scope.bat` | 用记事本编辑白名单群名并生效（中文群名走这个） |
 | `doctor.py [--write-test] [--llm-test]` | 自检：环境、飞书连通性、模型接口 |
 | `run_daily.py --source <目录> [--summarize]` | 采集 → 归一化 → 推送（+摘要） |
 | `normalize.py --date <日期> <来源...>` | 只做归一化 |
@@ -661,6 +684,8 @@ S4U（不依赖登录会话）需要「作为批处理作业登录」权限，**
 wechat-daily/
 ├── collector/
 │   ├── wechat4.py              微信 4.2 解密链路 + 配置命令（setup/export/set/scope…）
+│   ├── set_scope.bat           白名单群名设置（记事本编辑 include.txt）
+│   ├── include.example.txt     白名单文件示例（复制成 include.txt 再改）
 │   ├── _yara_shim.py          yara-python 的纯 Python 替身（Python 3.14 无 wheel）
 │   ├── setup.bat              一次性设置入口（纯 ASCII）
 │   ├── doctor.py / doctor.bat 自检：环境 / 飞书 / 模型接口

@@ -109,6 +109,7 @@ def test_zip_contents():
                      "collector/setup.bat", "collector/install_task.py",
                      "collector/install_task.bat", "collector/run_daily_logged.bat",
                      "collector/run_daily_logged.py", "collector/procutil.py",
+                     "collector/set_scope.bat", "collector/include.example.txt",
                      "tests/test_procutil.py", "tests/test_run_daily_logged.py",
                      "prompts/daily_report.md"):
         check("包含 %s" % required, os.path.isfile(os.path.join(ROOT, required)))

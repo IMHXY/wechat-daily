@@ -971,6 +971,28 @@ def _is_secret(key):
 
 
 
+def _read_include_file(path):
+    """从文本文件读白名单：每行一个群名，# 开头是注释，空行忽略。
+
+    为什么走文件而不是命令行参数：
+      群名一般是中文，而 .bat 必须是纯 ASCII —— cmd 用系统代码页（GBK）读
+      UTF-8 的 bat 会把命令解析搞崩。把中文放进 UTF-8 文本文件、由 Python
+      来读，是唯一稳的路子（set_scope.bat 就是这么做的）。
+    """
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            raw = f.read()
+    except OSError as exc:
+        raise RuntimeError("读不到白名单文件 %s：%s" % (path, exc))
+    names = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        names.append(line)
+    return ",".join(names)
+
+
 def cmd_scope(args):
     """查看和调整日报范围：哪些会话进日报、上下文怎么裁。"""
     bridge.load_env()
@@ -1002,6 +1024,13 @@ def cmd_scope(args):
         changed = True
     if getattr(args, "include", None) is not None:
         include_chats = args.include.strip()
+        changed = True
+    if getattr(args, "include_file", None):
+        try:
+            include_chats = _read_include_file(args.include_file)
+        except RuntimeError as exc:
+            out("[X] %s" % exc)
+            return 1
         changed = True
     if getattr(args, "clear_include", False):
         include_chats = ""
@@ -1259,7 +1288,9 @@ def main(argv=None):
     p_scope.add_argument("--window", type=int, help="上下文窗口 N；0=只留我自己的；-1=不裁剪")
     p_scope.add_argument("--reset", action="store_true", help="恢复默认（mine / 5）")
     p_scope.add_argument("--include", default=None,
-                         help="白名单群名（逗号分隔），不管我有没有说话都进日报")
+                          help="白名单群名，逗号分隔（群名包含关键字即命中）")
+    p_scope.add_argument("--include-file", default=None,
+                          help="白名单群名文件：每行一个群名，# 开头是注释（中文群名走这个）")
     p_scope.add_argument("--clear-include", action="store_true", help="清空白名单")
     p_scope.add_argument("--include-max", type=int, default=None,
                          help="白名单群我不在里面说话时，最多保留最近多少条（默认 50）")

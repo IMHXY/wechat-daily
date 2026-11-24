@@ -515,6 +515,55 @@ def test_set_clip_rejects_bad_llm_key():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_include_file():
+    """白名单从 UTF-8 文件读（中文群名不能走 cmd 参数）。
+
+    .bat 必须是纯 ASCII —— cmd 用系统代码页（GBK）读 UTF-8 的 bat 会崩，
+    所以中文群名放进 UTF-8 文本文件，由 Python 读。
+    """
+    print("\n[白名单文件]")
+    import wechat4
+    tmp = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmp, "include.txt")
+        with open(path, "w", encoding="utf-8-sig") as f:   # 带 BOM 也要能读
+            f.write("# 注释行\n\n周末骑行群\n读书会  \n# 另一个注释\n\n")
+        got = wechat4._read_include_file(path)
+        check("读出两个群名", got == "周末骑行群,读书会", got)
+        check("注释和空行被忽略", "#" not in got, got)
+
+        # 空文件 -> 清空白名单
+        empty = os.path.join(tmp, "empty.txt")
+        open(empty, "w", encoding="utf-8").close()
+        check("空文件得到空串", wechat4._read_include_file(empty) == "", "")
+
+        # 文件不存在 -> 明确报错，不是静默清空
+        try:
+            wechat4._read_include_file(os.path.join(tmp, "nope.txt"))
+            check("文件不存在会报错", False, "没抛异常")
+        except RuntimeError:
+            check("文件不存在会报错", True)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_set_scope_bat():
+    """set_scope.bat 必须是纯 ASCII（cmd 用 GBK 读 UTF-8 的 bat 会崩）。"""
+    print("\n[set_scope.bat]")
+    path = os.path.join(ROOT, "collector", "set_scope.bat")
+    check("有 set_scope.bat", os.path.isfile(path))
+    if not os.path.isfile(path):
+        return
+    raw = open(path, "rb").read()
+    bad = [(i, b) for i, b in enumerate(raw) if b > 127]
+    check("纯 ASCII", not bad,
+          "第 %d 字节: %s" % (bad[0][0], bad[0][1]) if bad else "")
+    text = raw.decode("ascii")
+    check("切了 UTF-8 代码页", "chcp 65001" in text, text[:200])
+    check("调的是 --include-file", "--include-file" in text, text[:200])
+    check("文件不存在时会给示例", "include.example.txt" in text, text[:200])
+
+
 if __name__ == "__main__":
     test_find_root()
     test_cli_contract()
@@ -534,5 +583,7 @@ if __name__ == "__main__":
     test_set_clip()
     test_set_clip_rejects_bad_llm_key()
     test_download_recovery()
+    test_include_file()
+    test_set_scope_bat()
     print("\n%s" % ("全部通过" if not FAILURES else "失败: %s" % FAILURES))
     sys.exit(1 if FAILURES else 0)
