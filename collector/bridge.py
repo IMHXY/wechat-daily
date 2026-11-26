@@ -6,6 +6,11 @@
   push  在你自己的电脑上跑，把当日数据推到中转存储
   pull  在平台云端跑（定时任务里），把当日数据拉回工作区
 
+已弃用：原始记录**不再上传飞书**。几百条消息的 JSON 塞进飞书单元格会撑爆
+单格上限（报 1254130 TooLargeCell），而且原始聊天记录留在本机更安全。
+现在飞书里只有日报成品，原始记录的权威归档是本机 data/<日期>.json。
+github / http 两条路的原始通道仍按原样工作。
+
 支持三种中转（通过环境变量 WEIXIN_BRIDGE 选择，缺省自动探测）：
   github  私有仓库，文件即数据。最省事，适合有 GitHub 账号的人。
   feishu  飞书多维表格，一行一天。国内网络友好，适合公司环境。
@@ -43,6 +48,9 @@ FEISHU_ERROR_HINTS = {
     1254065: ("Table Not Exist：这张表不存在或已被删除。",
               "检查表格 URL 里的 app_token / table_id。"),
     91402: ("Not Found：找不到这条记录。", "记录可能已被删掉，重新跑一次即可。"),
+    1254130: ("TooLargeCell：单元格内容太长写不进去。",
+              "这是把原始聊天记录整包塞进一列导致的（几百条消息就超上限）。"
+              "已弃用上传原始记录：原始记录只留在本机 data/ 目录，飞书里只放日报成品。"),
 }
 
 
@@ -307,42 +315,65 @@ def _feishu_search(date_str):
 
 
 def feishu_push(path, payload):
+    """已弃用：原始记录不上传飞书。
+
+    飞书表现在只有「日期 / 日报」两列。这里**只更新已存在的那一行的日期列**，
+    不会新建「只有日期、没有日报」的半成品行 —— 那一行由日报成品自己建
+    （日期 + 日报一起写，见 feishu_push_report）。
+
+    原始记录的权威归档是本机 data/<日期>.json。
+    """
     date_str = payload.get("date", "")
-    text = json.dumps(payload, ensure_ascii=False)
     items = _feishu_search(date_str)
     fields = {
         _env("FS_FIELD_DATE", "日期"): date_str,
-        _env("FS_FIELD_MSG", "消息数"): payload.get("stats", {}).get("message_count", 0),
-        _env("FS_FIELD_PAYLOAD", "内容"): text,
     }
+    if not items:
+        print("[warn] 原始记录不上传飞书（已弃用）——原始记录留在本机 data/%s.json" % date_str)
+        print("       飞书里的那一行由日报成品自己建：日期 + 日报一起写。")
+        return None
     app_token, table_id = _feishu_table()
     base = "https://open.feishu.cn/open-apis/bitable/v1/apps/%s/tables/%s/records" % (app_token, table_id)
-    if items:
-        record_id = items[0].get("record_id")
-        res = _request("PUT", base + "/" + record_id, _feishu_headers(),
-                       json.dumps({"fields": fields}, ensure_ascii=False).encode())
-    else:
-        res = _request("POST", base, _feishu_headers(),
-                       json.dumps({"fields": fields}, ensure_ascii=False).encode())
+    record_id = items[0].get("record_id")
+    res = _request("PUT", base + "/" + record_id, _feishu_headers(),
+                   json.dumps({"fields": fields}, ensure_ascii=False).encode())
     if res.get("code"):
         raise RuntimeError("飞书写入失败: %s %s" % (res.get("code"), res.get("msg")))
     return res
 
 
 def feishu_pull(path):
+    """已弃用：原始记录不上传飞书。
+
+    飞书表现在只有「日期 / 日报」两列，**没有「内容」列**。
+    这里保持容错：表里没有「内容」列、该列为空、或者压根没有这一天的
+    记录时，都返回 None 而不抛异常 —— 用户可能已经把那一列删了。
+    原始记录只留在本机 data/ 目录。
+    """
     date_str = os.path.basename(path).replace(".json", "")
     items = _feishu_search(date_str)
     if not items:
-        raise RuntimeError("飞书里没有 %s 的记录" % date_str)
+        return None
     fields = items[0].get("fields", {})
     raw = fields.get(_env("FS_FIELD_PAYLOAD", "内容"))
     if isinstance(raw, list):  # 飞书长文本字段有时返回数组
         raw = "".join(str(x.get("text", "")) for x in raw if isinstance(x, dict))
-    return json.loads(raw)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def feishu_push_report(date_str, text):
-    """只写「日报」列，不动原始内容列。"""
+    """写「日报」列，按日期 upsert。
+
+    表里只有「日期 / 日报」两列，所以**一次写全**：
+      找到同日期的行 → 只更新「日报」列
+      没找到        → 新建一行，「日期」和「日报」一起写
+    绝不留「只有日期、没有日报」的半成品行。
+    """
     items = _feishu_search(date_str)
     fields = {
         _env("FS_FIELD_DATE", "日期"): date_str,
@@ -521,6 +552,12 @@ def main(argv=None):
             sys.stderr.write("[ok] 已通过 %s 推送日报 %s\n" % (bridge, args.date))
         else:
             payload = do_pull(args.date, bridge)
+            if payload is None:
+                sys.stderr.write(
+                    "[error] %s 里没有 %s 的原始记录。\n"
+                    "        已弃用上传原始记录（原始记录只留在本机 data/ 目录），"
+                    "飞书里只有日报成品。\n" % (bridge, args.date))
+                return 1
             dest = args.out or os.path.join(root, "data", args.date + ".json")
             os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
             with open(dest, "w", encoding="utf-8") as f:

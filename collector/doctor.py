@@ -12,7 +12,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 import time
 
@@ -71,7 +70,9 @@ def check_config():
                "或者把 config.env.example 复制成 config.env 再填")
     return {k: os.environ.get(k, "") for k in
             ("EXPORT_DIR", "EXPORT_CMD", "WECHAT_DATA_DIR", "WEIXIN_BRIDGE",
-             "FS_APP_ID", "FS_APP_SECRET", "FS_TABLE_ID", "LLM_API_KEY")}
+             "FS_APP_ID", "FS_APP_SECRET", "FS_TABLE_ID",
+             "FS_FIELD_DATE", "FS_FIELD_MSG", "FS_FIELD_PAYLOAD", "FS_FIELD_REPORT",
+             "LLM_API_KEY")}
 
 
 def find_wechat_root(cfg):
@@ -320,19 +321,36 @@ def check_feishu(cfg):
         return
     fields = [f.get("field_name") for f in (data.get("data") or {}).get("items") or []]
     record(True, "飞书表格访问", "读到 %d 个字段：%s" % (len(fields), "、".join(fields)))
-    expect = [cfg.get("FS_FIELD_DATE", "日期"), cfg.get("FS_FIELD_MSG", "消息数"),
-              cfg.get("FS_FIELD_PAYLOAD", "内容"), cfg.get("FS_FIELD_REPORT", "日报")]
+    # 飞书表现在只有两列：日期 / 日报。
+    # 「消息数」「内容」都已弃用 —— 有就报一下（可以删），没有不算错。
+    expect = [cfg.get("FS_FIELD_DATE", "日期"), cfg.get("FS_FIELD_REPORT", "日报")]
     lack = [e for e in expect if e not in fields]
     if lack:
         record(False, "飞书表格字段", "缺列：" + "、".join(lack),
-               "四列名字必须一字不差：" + "、".join(expect))
+               "两列名字必须一字不差：" + "、".join(expect))
     else:
-        record(True, "飞书表格字段", "四列都在 ✓")
+        record(True, "飞书表格字段", "两列都在 ✓")
+    msg_col = cfg.get("FS_FIELD_MSG", "消息数")
+    if msg_col in fields:
+        record(True, "飞书表格字段", "另有已弃用的「%s」列（可以删掉）" % msg_col)
+    else:
+        record(True, "飞书表格字段",
+               "没有「%s」列 ✓（数字在日报第二行的概览里）" % msg_col)
+    raw_col = cfg.get("FS_FIELD_PAYLOAD", "内容")
+    if raw_col in fields:
+        record(True, "飞书表格字段", "另有已弃用的「%s」列（可以删掉）" % raw_col)
+    else:
+        record(True, "飞书表格字段",
+               "没有「%s」列 ✓（原始记录只留在本机 data/ 目录）" % raw_col)
 
 
 
 def check_feishu_write(cfg):
-    """真写一行测试日报再删掉，确认应用有写权限（只读协作者会在这里失败）。"""
+    """真写一行测试日报再删掉，确认应用有写权限（只读协作者会在这里失败）。
+
+    只写「日期 / 日报」两列 —— **绝不写消息数列和原始记录列**
+    （都已弃用：飞书里只放日报成品，原始记录只留在本机 data/ 目录）。
+    """
     print("\n--- 写权限自检 ---")
     parts = (cfg.get("FS_TABLE_ID") or "").strip().split("/", 1)
     if len(parts) != 2:
@@ -449,19 +467,23 @@ def check_llm(cfg, probe=False):
 
 
 def check_wechat_running():
-    """微信 4.x 进程名是 Weixin.exe。取密钥时它必须已登录并在跑。"""
-    if os.name != "nt":
-        return
+    """微信 4.x 进程名是 Weixin.exe。取密钥时它必须已登录并在跑。
+
+    判断逻辑放在 wechat4.py 里（wechat4.wechat_running），导出前检查也复用它，
+    别两处各写一套。判不出来（不在 Windows）时保持安静。
+    """
     try:
-        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Weixin.exe"],
-                             capture_output=True, text=True, timeout=10).stdout
-        if "Weixin.exe" in out:
-            record(True, "微信进程", "Weixin.exe 正在运行")
-        else:
-            warn("微信进程", "没找到 Weixin.exe",
-                 "取密钥需要微信已登录并运行")
+        import wechat4
+        running = wechat4.wechat_running()
     except Exception:
-        pass
+        return
+    if running is None:
+        return          # 判不出来，不下结论
+    if running:
+        record(True, "微信进程", "Weixin.exe 正在运行")
+    else:
+        warn("微信进程", "没找到 Weixin.exe",
+             "取密钥需要微信已登录并运行")
 
 
 def next_steps(cfg):

@@ -547,8 +547,13 @@ def main(argv=None):
         if not kind:
             print("[warn] 未配置中转，跳过推送")
         else:
-            bridge.do_push_report(date_str, report, kind)
-            print("[ok] 已通过 %s 推送日报" % kind)
+            try:
+                bridge.do_push_report(date_str, report, kind)
+                print("[ok] 已通过 %s 推送日报" % kind)
+            except Exception as exc:
+                # 推不上去也要留下日报：只警告，不中断（日报已经写在本机了）。
+                print("[warn] 日报推送失败（不影响日报）：%s" % exc)
+                print("       日报已经写在本机 %s，可以稍后重新推。" % out_path)
     return 0
 
 

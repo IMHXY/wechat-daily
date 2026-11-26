@@ -7,6 +7,7 @@
 
 --source 指向微信聊天记录的导出目录（chatlog 输出的 JSON 目录、或留痕导出的 CSV 目录）。
 数据会先落到本地 data/<日期>.json，再按配置推到中转存储。
+推送失败只会打印一行警告，**不会**中断后面的日报生成 —— 日报才是正事。
 """
 
 import argparse
@@ -122,10 +123,19 @@ def main(argv=None):
         kind = (args.bridge or bridge.detect_bridge()).lower()
         if not kind:
             print("[3/3] 未配置中转，文件留在本地（设置 WEIXIN_BRIDGE 后可推送）")
+        elif kind == "feishu":
+            # 飞书里只放日报成品：原始记录不上传飞书（几百条消息放不进一个单元格，
+            # 会报 1254130 TooLargeCell），它就留在本机 data/ 目录。
+            print("[3/3] 飞书只放日报成品，原始记录留在本机 %s" % local_file)
         else:
             print("[3/3] 推送到 %s ..." % kind)
-            bridge.do_push(date_str, daily, kind)
-            print("[ok] 原始记录已推送")
+            try:
+                bridge.do_push(date_str, daily, kind)
+                print("[ok] 原始记录已推送")
+            except Exception as exc:
+                # 推送失败**不能**拖死日报：日报才是正事，原始记录在本机 data/ 里。
+                print("[warn] 原始记录推送失败（不影响日报）：%s" % exc)
+                print("       原始记录已经写在本机 %s，重新排期可以再推。" % local_file)
 
     if args.summarize:
         print("[4/4] 生成本机日报 ...")

@@ -294,7 +294,10 @@ def test_write_config():
         check("飞书三项留空", "FS_APP_ID=\n" in text and "FS_APP_SECRET=\n" in text
               and "FS_TABLE_ID=\n" in text)
         check("本机 key 留空", "LLM_API_KEY=\n" in text)
-        check("字段名是中文四列",
+        # 飞书表现在只有「日期 / 日报」两列生效；「消息数」「内容」已弃用，
+        # 在模板里保留为注释。这里只确认四个 FS_FIELD_* 键名都还在模板里出现过
+        # （两个生效 + 两个弃用注释），不改变原有断言逻辑。
+        check("飞书表字段名是中文两列：日期 / 日报",
               all(("FS_FIELD_%s=" % k) in text for k in ("DATE", "MSG", "PAYLOAD", "REPORT")))
 
         # 已填的值要保留
@@ -569,7 +572,11 @@ def test_set_scope_bat():
 
 
 def test_regen_reports_bat():
-    """regen_reports.bat 必须纯 ASCII，且流程是「拉归档 -> 重排 -> 回写」。"""
+    """regen_reports.bat 必须纯 ASCII，且流程是「本地归档 -> 重排 -> 回写」。
+
+    原始记录不再上传飞书，本机 data\<日期>.json 才是权威归档：
+    本地有就直接重排，没有才退回 bridge.py pull。
+    """
     print("\n[regen_reports.bat]")
     path = os.path.join(ROOT, "collector", "regen_reports.bat")
     check("有 regen_reports.bat", os.path.isfile(path))
@@ -581,7 +588,10 @@ def test_regen_reports_bat():
           "第 %d 字节: %s" % (bad[0][0], bad[0][1]) if bad else "")
     text = raw.decode("ascii")
     check("切了 UTF-8 代码页", "chcp 65001" in text, text[:200])
-    check("先拉归档", "bridge.py pull" in text, text[:400])
+    check("优先用本地归档", "..\\data\\%1.json" in text, text[:600])
+    check("本地没有才拉", "bridge.py pull" in text, text[:600])
+    check("先看本地再决定", text.find("..\\data\\%1.json") < text.find("bridge.py pull --date"),
+          text[:600])
     check("再重排", "summarize_local.py" in text, text[:400])
     check("回写日报列", "--push" in text, text[:400])
     check("不带参数时取前两天", "timedelta(days=1)" in text, text[:600])

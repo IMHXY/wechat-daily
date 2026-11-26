@@ -483,6 +483,26 @@ def find_weixin_dll():
     return None, None
 
 
+def wechat_running():
+    """微信 4.x 的进程名是 Weixin.exe。
+
+    doctor.py 的自检和导出前的检查共用这一个判断，别两处各写一套。
+
+    返回三种状态：
+      True   确定在跑
+      False  确定没在跑
+      None   判不出来（不在 Windows / tasklist 不可用）—— 调用方这时别啰嗦
+    """
+    if os.name != "nt":
+        return None
+    try:
+        res = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Weixin.exe"],
+                             capture_output=True, text=True, timeout=10)
+        return "Weixin.exe" in (res.stdout or "")
+    except Exception:
+        return None
+
+
 def find_weixin_pid():
     """找微信主进程 PID（窗口标题含「微信」的窗口所属进程）。"""
     if os.name != "nt":
@@ -576,7 +596,23 @@ def inject_key(keeper_exe, passphrase, root):
 DIRECTORY_FILE = "wechat_directory.json"
 
 
+def warn_if_wechat_closed():
+    """导出前看一眼微信在不在跑。
+
+    微信没开 = 今天的聊天可能还没同步到电脑上，导出来的只有旧记录。
+    **只警告、不中断**：用户可能早上聊完就关了微信，数据其实早就同步好了；
+    真同步没完成的话，他看到警告自己决定重跑不迟。
+    """
+    if wechat_running() is not False:
+        return False   # 在跑，或者判不出来（不是 Windows）—— 都不啰嗦
+    out("[warn] 微信客户端（Weixin.exe）现在没在运行")
+    out("       → 今天的消息可能还没同步到电脑上，导出的可能只有旧的记录")
+    out("       → 在这台电脑上登录微信、等它同步一会儿，再重跑")
+    return True
+
+
 def do_export(keeper_exe, root, out_dir, days=2):
+    warn_if_wechat_closed()
     out("    导出最近 %d 天的聊天记录 ..." % days)
     out("    (可能要几分钟。中间没输出不代表卡死，**别按 Ctrl+C**。)")
     os.makedirs(out_dir, exist_ok=True)
@@ -646,8 +682,10 @@ FS_APP_SECRET={fs_app_secret}
 # 表格 URL 里的 app_token 与 table_id
 FS_TABLE_ID={fs_table_id}
 FS_FIELD_DATE=日期
-FS_FIELD_MSG=消息数
-FS_FIELD_PAYLOAD=内容
+# 已弃用：消息数不再单独成列（数字在日报第二行的概览里）
+# FS_FIELD_MSG=消息数
+# 已弃用：原始记录不再上传飞书（原始记录只留在本机 data/ 目录）
+# FS_FIELD_PAYLOAD=内容
 FS_FIELD_REPORT=日报
 
 # ---------- 本机摘要（用你自己的 API key，聊天记录不出本机） ----------
